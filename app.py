@@ -32,6 +32,7 @@ st.set_page_config(
 with st.sidebar:
     st.title("Filtros")
 
+    # Ano
     anos = anos_disponiveis()
     ano_sel = st.selectbox(
         "Ano de notificacao",
@@ -50,17 +51,92 @@ with st.sidebar:
         )
         st.stop()
 
+    # Carrega dados completos do ano
+    df_completo = carregar_dados(str(path_sel))
+
+    st.divider()
+
+    # Estado
+    estados_disponiveis = sorted(
+        df_completo["estado_notificacao"].dropna().unique().tolist()
+    )
+    estados_sel = st.multiselect(
+        "Estado (UF)",
+        options=estados_disponiveis,
+        default=[],
+        placeholder="Todos os estados",
+    )
+
+    # Sexo
+    sexos = ["Todos"] + sorted(
+        df_completo["sexo"].dropna().unique().tolist()
+    ) if "sexo" in df_completo.columns else ["Todos"]
+    sexo_sel = st.selectbox("Sexo", options=sexos)
+
+    # Forma clínica
+    if "forma" in df_completo.columns:
+        formas = ["Todas"] + sorted(
+            [v for v in df_completo["forma"].dropna().unique().tolist()
+             if v not in ("Nao informado", "Ignorado")]
+        )
+        forma_sel = st.selectbox("Forma Clinica", options=formas)
+    else:
+        forma_sel = "Todas"
+
+    # Tipo de entrada
+    if "tipo_entrada" in df_completo.columns:
+        entradas = ["Todos"] + sorted(
+            [v for v in df_completo["tipo_entrada"].dropna().unique().tolist()
+             if v not in ("Nao informado", "Ignorado")]
+        )
+        entrada_sel = st.selectbox("Tipo de Entrada", options=entradas)
+    else:
+        entrada_sel = "Todos"
+
     st.divider()
     st.caption("Fonte: SINAN NET — Ministerio da Saude")
 
-# ── Carregamento ───────────────────────────────────────────────────────────────
-df = carregar_dados(str(path_sel))
+# ── Aplicação dos filtros ──────────────────────────────────────────────────────
+df = df_completo.copy()
 
+if estados_sel:
+    df = df[df["estado_notificacao"].isin(estados_sel)]
+if sexo_sel != "Todos":
+    df = df[df["sexo"] == sexo_sel]
+if forma_sel != "Todas":
+    df = df[df["forma"] == forma_sel]
+if entrada_sel != "Todos":
+    df = df[df["tipo_entrada"] == entrada_sel]
+
+# ── Cabeçalho ─────────────────────────────────────────────────────────────────
 st.title(f"Tuberculose no Brasil — SINAN {ano_sel}")
-st.caption(
-    f"{len(df):,} notificacoes  |  "
-    f"{df['estado_notificacao'].nunique()} estados"
-)
+
+filtros_ativos = sum([
+    bool(estados_sel),
+    sexo_sel != "Todos",
+    forma_sel != "Todas",
+    entrada_sel != "Todos",
+])
+
+total = len(df_completo)
+filtrado = len(df)
+pct = round(100 * filtrado / total, 1) if total else 0
+
+if filtros_ativos:
+    st.caption(
+        f"{filtrado:,} de {total:,} notificacoes ({pct}%)  |  "
+        f"{df['estado_notificacao'].nunique()} estados  |  "
+        f"{filtros_ativos} filtro(s) ativo(s)"
+    )
+else:
+    st.caption(
+        f"{total:,} notificacoes  |  "
+        f"{df_completo['estado_notificacao'].nunique()} estados"
+    )
+
+if filtrado == 0:
+    st.warning("Nenhum registro encontrado com os filtros selecionados. Ajuste os filtros na sidebar.")
+    st.stop()
 
 tab_paineis, tab_livre = st.tabs(["Paineis", "Analise Livre"])
 
