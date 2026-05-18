@@ -1,0 +1,9 @@
+streamlit>=1.45,<2.0
+pandas>=2.2,<3.0
+pygwalker>=0.5
+pyarrow>=14.0
+sqlalchemy>=2.0
+psycopg2-binary>=2.9
+plotly>=5.20
+python-dotenv>=1.0
+requests>=2.31

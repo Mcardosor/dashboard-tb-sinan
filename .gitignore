@@ -1,0 +1,23 @@
+# Dados brutos e processados (nunca versionar)
+dados_dashboard/*.parquet
+dados_dashboard/*.csv
+dados_dashboard/sinan_tube_*.parquet
+
+# Credenciais
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+dist/
+build/
+
+# Streamlit
+.streamlit/secrets.toml
+
+# Sistema
+.DS_Store
+Thumbs.db
