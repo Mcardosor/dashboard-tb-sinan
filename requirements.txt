@@ -7,3 +7,5 @@ psycopg2-binary>=2.9
 plotly>=5.20
 python-dotenv>=1.0
 requests>=2.31
+folium>=0.19
+streamlit-folium>=0.25

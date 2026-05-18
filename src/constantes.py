@@ -5,12 +5,26 @@ Mapeamentos, paletas de cores e configurações globais do dashboard.
 Centraliza aqui tudo que é reutilizado em graficos.py e app.py.
 """
 
+import streamlit as st
+import pandas as pd
 from pathlib import Path
 
 # ── Caminhos ───────────────────────────────────────────────────────────────────
 PASTA_DADOS  = Path("dados_dashboard")
+PASTA        = PASTA_DADOS          # alias de compatibilidade
 GEOJSON_PATH = PASTA_DADOS / "br_states.geojson"
 SPEC_PATH    = "spec/dashboard_tb.json"
+
+# Histórico pré-agregado (gerado por conectar_banco.py para múltiplos anos)
+HIST_MENSAL      = PASTA_DADOS / "historico_mensal.csv"
+HIST_ESTADUAL    = PASTA_DADOS / "historico_estadual.csv"
+HIST_ANUAL       = PASTA_DADOS / "historico_anual.csv"
+HIST_INDICADORES = PASTA_DADOS / "historico_indicadores.csv"
+MUN_PARQUET      = PASTA_DADOS / "municipios.parquet"
+MUN_URL = "https://raw.githubusercontent.com/kelvins/municipios-brasileiros/main/csv/municipios.csv"
+
+ANO_ATUAL  = 2025
+ANO_INICIO = 2001
 
 
 def parquet_path(ano: int) -> Path:
@@ -41,7 +55,7 @@ UF_SIGLAS = {
     "Rio Grande do Norte": "RN", "Rio Grande do Sul": "RS", "Rondonia": "RO",
     "Roraima": "RR", "Santa Catarina": "SC", "Sao Paulo": "SP",
     "Sergipe": "SE", "Tocantins": "TO",
-    # Com acentos (como podem vir do SINAN)
+    # Com acentos
     "Amapá": "AP", "Ceará": "CE", "Espírito Santo": "ES", "Goiás": "GO",
     "Maranhão": "MA", "Pará": "PA", "Paraíba": "PB", "Piauí": "PI",
     "Rondônia": "RO", "São Paulo": "SP", "Paraná": "PR",
@@ -66,7 +80,7 @@ POPULACOES = {
     "beneficiario_governo":        "Beneficiario Prog. Social",
 }
 
-# ── Normalização de desfechos (lida com acentos e variações do SINAN) ──────────
+# ── Normalização de desfechos ──────────────────────────────────────────────────
 NORMALIZAR_DESFECHO = {
     "Nao informado":           "Em acompanhamento",
     "Não informado":           "Em acompanhamento",
@@ -78,47 +92,193 @@ NORMALIZAR_DESFECHO = {
     "Falência":                "Falencia",
 }
 
-# ── Paletas de cores ───────────────────────────────────────────────────────────
+# ── Paletas de cores legadas (mantidas para fig_mapa / fig_piramide) ───────────
 CORES_DESFECHOS = {
-    "Cura":                    "#22C55E",
-    "Em acompanhamento":       "#94A3B8",
-    "Transferencia":           "#60A5FA",
-    "Mudanca de Esquema":      "#FB923C",
-    "Abandono Primario":       "#FACC15",
-    "Abandono":                "#F97316",
-    "Falencia":                "#EF4444",
-    "TB-DR":                   "#A855F7",
-    "Obito por outras causas": "#DC2626",
-    "Obito por TB":            "#7F1D1D",
+    "Cura":                    "#2ea043",
+    "Em acompanhamento":       "#8b949e",
+    "Transferencia":           "#58a6ff",
+    "Mudanca de Esquema":      "#d29922",
+    "Abandono Primario":       "#bb8009",
+    "Abandono":                "#f0883e",
+    "Falencia":                "#f85149",
+    "TB-DR":                   "#a371f7",
+    "Obito por outras causas": "#8957e5",
+    "Obito por TB":            "#da3633",
 }
 
 CORES_RACA = {
-    "Parda":    "#F59E0B", "Branca":   "#93C5FD",
-    "Preta":    "#818CF8", "Amarela":  "#34D399", "Indigena": "#F472B6",
+    "Parda":    "#d2a8ff", "Branca": "#79c0ff",
+    "Preta":    "#a371f7", "Amarela": "#f0b342", "Indigena": "#3fb950",
+    "Indígena": "#3fb950",
 }
 
 CORES_FORMA = {
-    "Pulmonar":                 "#38BDF8",
-    "Extrapulmonar":            "#818CF8",
-    "Pulmonar + Extrapulmonar": "#F472B6",
+    "Pulmonar":                 "#58a6ff",
+    "Extrapulmonar":            "#a371f7",
+    "Pulmonar + Extrapulmonar": "#d2a8ff",
 }
 
 ESCALA_MAPA = [
-    [0.0,  "#FFF5F0"], [0.15, "#FDCBB7"],
-    [0.35, "#FC8A6A"], [0.55, "#F14432"],
-    [0.75, "#C0151A"], [1.0,  "#67000D"],
+    [0.0,  "#0d1117"], [0.15, "#1f4d8a"],
+    [0.35, "#1f6feb"], [0.55, "#58a6ff"],
+    [0.75, "#a5d6ff"], [1.0,  "#cae8ff"],
 ]
 
-# ── Configurações Plotly ───────────────────────────────────────────────────────
-PLOTLY_CFG  = {"scrollZoom": False}
-BG          = {"paper_bgcolor": "rgba(0,0,0,0)", "plot_bgcolor": "rgba(0,0,0,0)"}
+# ── Paleta TB — semântica epidemiológica ──────────────────────────────────────
+TB_COLORS = {
+    # Desfecho clínico
+    "Cura":                     "#2ea043",
+    "Óbito por TB":             "#da3633",
+    "Obito por TB":             "#da3633",
+    "Óbito outras causas":      "#8957e5",
+    "Obito por outras causas":  "#8957e5",
+    "Abandono":                 "#d29922",
+    "Abandono Primario":        "#bb8009",
+    "Abandono Primário":        "#bb8009",
+    "Falencia":                 "#f85149",
+    "Falência":                 "#f85149",
+    "TB-DR":                    "#cf222e",
+    "Transferencia":            "#1f6feb",
+    "Transferência":            "#1f6feb",
+    "Mudanca de Esquema":       "#8b949e",
+    "Mudança de Esquema":       "#8b949e",
+    "Mudança Diagnóstico":      "#6e7681",
+    "Em acompanhamento":        "#484f58",
+    # HIV
+    "Positivo":                 "#da3633",
+    "Negativo":                 "#3fb950",
+    "Em andamento":             "#d29922",
+    "Não realizado":            "#6e7681",
+    "Nao realizado":            "#6e7681",
+    # Sexo
+    "Masculino":                "#58a6ff",
+    "Feminino":                 "#f778ba",
+    # Sim/Não
+    "Sim":                      "#da3633",
+    "Não":                      "#3fb950",
+    "Nao":                      "#3fb950",
+    "Ignorado":                 "#6e7681",
+    # Baciloscopia / TMR
+    "Positiva":                 "#da3633",
+    "Negativa":                 "#3fb950",
+    "Não realizada":            "#6e7681",
+    "Nao realizada":            "#6e7681",
+    "Não se aplica":            "#484f58",
+    "Detectável sensível":      "#d29922",
+    "Detectavel sensivel":      "#d29922",
+    "Detectável resistente":    "#da3633",
+    "Detectavel resistente":    "#da3633",
+    "Não detectável":           "#3fb950",
+    "Nao detectavel":           "#3fb950",
+    "Inconclusivo":             "#8b949e",
+    # Raça
+    "Branca":                   "#79c0ff",
+    "Preta":                    "#a371f7",
+    "Parda":                    "#d2a8ff",
+    "Amarela":                  "#f0b342",
+    "Indígena":                 "#3fb950",
+    "Indigena":                 "#3fb950",
+    # Forma clínica
+    "Pulmonar":                       "#58a6ff",
+    "Extrapulmonar":                  "#a371f7",
+    "Pulmonar + Extrapulmonar":       "#d2a8ff",
+    # Tipo de entrada
+    "Caso Novo":                "#3fb950",
+    "Recidiva":                 "#d29922",
+    "Reingresso Abandono":      "#f0883e",
+    "Não Sabe":                 "#6e7681",
+    "Nao Sabe":                 "#6e7681",
+    "Pos-obito":                "#a40e26",
+    "Pós-óbito":                "#a40e26",
+}
+
+# Paletas sequenciais para mapas
+TB_SEQ_INCIDENCIA = ["#0d1117", "#1f4d8a", "#1f6feb", "#58a6ff", "#79c0ff", "#a5d6ff"]
+TB_SEQ_MORTAL     = ["#0d1117", "#67060c", "#a40e26", "#da3633", "#f85149", "#ffa198"]
+
+# Sequência para categorias sem cor semântica definida
+CORES = ["#58a6ff", "#a371f7", "#3fb950", "#d29922", "#f778ba", "#79c0ff", "#d2a8ff"]
+
+
+def tb_color_map(labels: list[str]) -> dict:
+    """Mapeia lista de labels para cores TB (fallback determinístico)."""
+    mapping = {}
+    fallback_idx = 0
+    for lbl in labels:
+        if lbl in TB_COLORS:
+            mapping[lbl] = TB_COLORS[lbl]
+        else:
+            mapping[lbl] = CORES[fallback_idx % len(CORES)]
+            fallback_idx += 1
+    return mapping
+
+
+# ── Template Plotly padronizado ────────────────────────────────────────────────
+PLOTLY_TEMPLATE = {
+    "layout": {
+        "font": {"family": "Inter, -apple-system, system-ui, sans-serif",
+                 "color": "#c9d1d9", "size": 12},
+        "paper_bgcolor": "rgba(0,0,0,0)",
+        "plot_bgcolor":  "rgba(0,0,0,0)",
+        "title": {"font": {"size": 15, "color": "#f0f6fc", "family": "Inter, sans-serif"},
+                  "x": 0.02, "xanchor": "left", "pad": {"t": 10, "b": 5}},
+        "xaxis": {"gridcolor": "#21262d", "linecolor": "#30363d",
+                  "tickfont": {"color": "#8b949e", "size": 11},
+                  "title_font": {"color": "#c9d1d9", "size": 12}},
+        "yaxis": {"gridcolor": "#21262d", "linecolor": "#30363d",
+                  "tickfont": {"color": "#8b949e", "size": 11},
+                  "title_font": {"color": "#c9d1d9", "size": 12}},
+        "legend": {"bgcolor": "rgba(22,27,34,.7)", "bordercolor": "#30363d",
+                   "borderwidth": 1, "font": {"color": "#c9d1d9", "size": 11}},
+        "hoverlabel": {"bgcolor": "#161b22", "bordercolor": "#30363d",
+                       "font": {"color": "#f0f6fc", "family": "Inter, sans-serif"}},
+        "margin": {"l": 50, "r": 30, "t": 50, "b": 50},
+    }
+}
+
+# Mantido para compatibilidade com graficos.py legado
+BG = {
+    "paper_bgcolor": "rgba(0,0,0,0)",
+    "plot_bgcolor":  "rgba(0,0,0,0)",
+}
 HOVER_LABEL = dict(
     bgcolor="rgba(30,30,40,0.95)",
     bordercolor="rgba(255,255,255,0.15)",
     font=dict(size=13),
 )
+PLOTLY_CFG = {"scrollZoom": False}
 
-# ── Colunas expostas na aba de Análise Livre (PyGWalker) ──────────────────────
+
+def tb_layout(fig, titulo=None, altura=None):
+    """Aplica template TB padronizado em uma figura Plotly."""
+    fig.update_layout(**PLOTLY_TEMPLATE["layout"])
+    if titulo:
+        fig.update_layout(title_text=titulo)
+    if altura:
+        fig.update_layout(height=altura)
+    return fig
+
+
+# ── Alturas padrão de gráficos ─────────────────────────────────────────────────
+H_SMALL  = 300
+H_MEDIUM = 380
+H_LARGE  = 480
+
+# ── População por estado — IBGE Censo 2022 ─────────────────────────────────────
+POP_ESTADO = {
+    "AC":    906_876,   "AL":  3_127_683,  "AM":  4_269_995,
+    "AP":    877_613,   "BA": 14_873_064,  "CE":  9_240_580,
+    "DF":  3_094_325,   "ES":  4_108_508,  "GO":  7_206_589,
+    "MA":  7_114_598,   "MG": 21_292_666,  "MS":  2_839_188,
+    "MT":  3_658_813,   "PA":  8_777_124,  "PB":  4_059_905,
+    "PE":  9_674_793,   "PI":  3_281_480,  "PR": 11_597_484,
+    "RJ": 17_366_189,   "RN":  3_302_406,  "RO":  1_590_011,
+    "RR":    652_713,   "RS": 11_466_630,  "SC":  7_786_786,
+    "SE":  2_338_474,   "SP": 46_649_132,  "TO":  1_607_363,
+}
+POP_BRASIL = sum(POP_ESTADO.values())
+
+# ── Colunas expostas na Análise Livre ─────────────────────────────────────────
 COLUNAS_ANALISE = (
     "estado_notificacao", "municipio_notificacao", "uf_residencia",
     "ano_notificacao", "data_notificacao", "data_diagnostico",
@@ -138,3 +298,45 @@ COLUNAS_ANALISE = (
     "profissional_saude", "populacao_imigrante", "beneficiario_governo",
     "numero_contatos", "numero_contatos_examinados",
 )
+
+# ── Helpers ────────────────────────────────────────────────────────────────────
+def pct(valor, total):
+    return f"{valor/total*100:.1f}%" if total and total > 0 else "—"
+
+
+def grafico_vazio():
+    st.info("Nenhum dado disponível para os filtros selecionados.")
+
+
+# ── KPI Card builder ───────────────────────────────────────────────────────────
+def _delta_badge(cur, prev, good_when_up=False):
+    try:
+        cur, prev = float(cur), float(prev)
+        if prev == 0:
+            return ""
+        diff_pct = (cur - prev) / prev * 100
+        if abs(diff_pct) < 0.1:
+            return '<span class="kpi-delta flat">≈ estável vs ano anterior</span>'
+        arrow = "↑" if diff_pct > 0 else "↓"
+        cls   = "good" if (diff_pct > 0) == good_when_up else "bad"
+        return f'<span class="kpi-delta {cls}">{arrow} {abs(diff_pct):.1f}% vs ano anterior</span>'
+    except Exception:
+        return ""
+
+
+def kpi_card_html(title, value, delta_html, icon, accent, selected):
+    sel   = "kpi-selected" if selected else ""
+    delta = delta_html.strip() if delta_html else ""
+    return (
+        f'<div class="kpi-card {sel}" style="--accent:{accent};">'
+        f'<div class="kpi-inner">'
+        f'<div class="kpi-bar"></div>'
+        f'<div class="kpi-body">'
+        f'<div class="kpi-label">{title}</div>'
+        f'<div class="kpi-value">{value}</div>'
+        f'{delta}'
+        f'</div>'
+        f'<div class="kpi-icon">{icon}</div>'
+        f'</div>'
+        f'</div>'
+    )
