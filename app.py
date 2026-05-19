@@ -14,17 +14,24 @@ from pathlib import Path
 
 from src.constantes import (
     SPEC_PATH, COLUNAS_ANALISE, PLOTLY_CFG,
-    anos_disponiveis, parquet_path,
+    anos_disponiveis, parquet_path, UF_SIGLAS,
 )
 from src.dados import (
     carregar_dados, carregar_geojson,
     selecionar_colunas, gerar_html_pygwalker,
 )
 from src import graficos
+from src import mapa_municipios
+
+try:
+    from streamlit_folium import st_folium
+    _FOLIUM_OK = True
+except ImportError:
+    _FOLIUM_OK = False
 
 st.set_page_config(
     page_title="Tuberculose Brasil - SINAN",
-    page_icon=":lungs:",
+    page_icon="🫁",
     layout="wide",
 )
 
@@ -75,9 +82,10 @@ with st.sidebar:
 
     # Forma clínica
     if "forma" in df_completo.columns:
+        _EXCLUIR_FORMA = {"Nao informado", "Não informado", "Ignorado"}
         formas = ["Todas"] + sorted(
             [v for v in df_completo["forma"].dropna().unique().tolist()
-             if v not in ("Nao informado", "Ignorado")]
+             if v not in _EXCLUIR_FORMA]
         )
         forma_sel = st.selectbox("Forma Clinica", options=formas)
     else:
@@ -85,9 +93,10 @@ with st.sidebar:
 
     # Tipo de entrada
     if "tipo_entrada" in df_completo.columns:
+        _EXCLUIR_ENTRADA = {"Nao informado", "Não informado", "Ignorado", "Não Sabe"}
         entradas = ["Todos"] + sorted(
             [v for v in df_completo["tipo_entrada"].dropna().unique().tolist()
-             if v not in ("Nao informado", "Ignorado")]
+             if v not in _EXCLUIR_ENTRADA]
         )
         entrada_sel = st.selectbox("Tipo de Entrada", options=entradas)
     else:
@@ -97,7 +106,7 @@ with st.sidebar:
     st.caption("Fonte: SINAN NET — Ministerio da Saude")
 
 # ── Aplicação dos filtros ──────────────────────────────────────────────────────
-df = df_completo.copy()
+df = df_completo
 
 if estados_sel:
     df = df[df["estado_notificacao"].isin(estados_sel)]
@@ -143,7 +152,7 @@ tab_paineis, tab_livre = st.tabs(["Paineis", "Analise Livre"])
 # ── ABA: PAINEIS ───────────────────────────────────────────────────────────────
 with tab_paineis:
 
-    # Mapa
+    # ── Mapa por estado ────────────────────────────────────────────────────────
     st.subheader("Casos por Estado")
     st.caption("Cada estado colorido pela quantidade de notificacoes.")
     try:
@@ -154,6 +163,47 @@ with tab_paineis:
         )
     except FileNotFoundError:
         st.warning("GeoJSON nao encontrado. Execute: python scripts/baixar_geojson.py")
+
+    # ── Drill-down por município ───────────────────────────────────────────────
+    st.subheader("Detalhamento por Municipio")
+    st.caption(
+        "Selecione um estado para ver a distribuicao de casos por municipio. "
+        "Passe o mouse sobre o mapa para ver o nome e o numero de notificacoes."
+    )
+
+    estados_com_dados = sorted(df["estado_notificacao"].dropna().unique().tolist())
+    estado_drill = st.selectbox(
+        "Estado para detalhar",
+        options=["— Selecione um estado —"] + estados_com_dados,
+        index=0,
+        label_visibility="collapsed",
+    )
+
+    if estado_drill != "— Selecione um estado —":
+        uf_drill = UF_SIGLAS.get(estado_drill)
+        if uf_drill is None:
+            st.warning(f"Sigla nao encontrada para '{estado_drill}'. Verifique UF_SIGLAS em constantes.py.")
+        else:
+            df_estado = df[df["estado_notificacao"] == estado_drill]
+            if df_estado.empty:
+                st.info("Nenhuma notificacao encontrada para este estado com os filtros atuais.")
+            else:
+                st.caption(
+                    f"{len(df_estado):,} notificacoes em {estado_drill} ({uf_drill})  |  "
+                    f"{df_estado['municipio_notificacao'].nunique()} municipios"
+                )
+                with st.spinner(f"Carregando mapa de {estado_drill}..."):
+                    mapa_mun = mapa_municipios.criar_mapa_municipios(df_estado, uf_drill)
+
+                if mapa_mun is None:
+                    st.warning(
+                        f"GeoJSON de municipios nao encontrado para {uf_drill}. "
+                        f"Execute: python scripts/baixar_geojson_municipios.py {uf_drill}"
+                    )
+                elif not _FOLIUM_OK:
+                    st.error("Pacote streamlit-folium nao instalado. Execute: pip install streamlit-folium")
+                else:
+                    st_folium(mapa_mun, use_container_width=True, height=520, returned_objects=[])
 
     st.divider()
 

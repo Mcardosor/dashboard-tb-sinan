@@ -48,7 +48,7 @@ url = URL.create(
     username=os.getenv("DB_USER"),
     password=os.getenv("DB_PASSWORD"),
     host=os.getenv("DB_HOST"),
-    port=int(os.getenv("DB_PORT")),
+    port=int(os.getenv("DB_PORT", "5432")),
     database=os.getenv("DB_NAME"),
 )
 engine = create_engine(url, pool_pre_ping=True)
@@ -73,4 +73,4 @@ for ano in anos:
     print(f"  💾 Salvo em: {saida}  ({tamanho_mb:.1f} MB)")
 
 print(f"\n✅ Exportação concluída: {len(anos)} ano(s)")
-print("Próximo passo: python scripts/preparar_dados.py [ano]")
+print("Proximo passo: python scripts/preparar_dados.py ANO")

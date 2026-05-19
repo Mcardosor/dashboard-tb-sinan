@@ -169,7 +169,7 @@ def fig_forma_clinica(df: pd.DataFrame) -> go.Figure | None:
         df["forma"].astype(str).value_counts().reset_index()
         .rename(columns={"forma": "categoria", "count": "casos"})
     )
-    forma = forma[~forma["categoria"].isin(["nan", "Nao informado", "Ignorado"])]
+    forma = forma[~forma["categoria"].isin(["nan", "Nao informado", "Não informado", "Ignorado"])]
     forma = forma.sort_values("casos", ascending=True)
     forma["pct"] = (forma["casos"] / forma["casos"].sum() * 100).round(1)
 

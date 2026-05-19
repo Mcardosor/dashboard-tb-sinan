@@ -10,7 +10,6 @@ Uso:
     python scripts/preparar_dados.py 2020 2025 # processa um intervalo de anos
 """
 
-import re
 import sys
 import time
 from pathlib import Path
@@ -35,7 +34,7 @@ else:
 COLUNAS_REMOVER = [
     "data_transferencia_rm", "codigo_fluxo_retorno", "codigo_fluxo_recebido",
     "indicador_migracao", "detalhe_agravo_outros", "detalhe_outras_drogas",
-    "data_notificacao_atual",
+    "data_notificacao_atual", "sk_sinan_tube",
 ]
 
 COLUNAS_DATA = [
@@ -51,45 +50,57 @@ COLUNAS_INT = [
 ]
 
 COLUNAS_CATEGORIA = [
-    "sexo", "raca_cor", "escolaridade", "gestante",
-    "tipo_entrada", "forma", "extrapulmonar", "extrapulmonar2",
+    # Identificação geográfica
+    "estado_notificacao", "municipio_notificacao",
+    "uf_residencia", "municipio_residencia",
+    "regional_notificacao", "regional_residencia",
+    "estado_atendimento_atual", "municipio_atendimento_atual",
+    "estado_segunda_notificacao", "municipio_segunda_notificacao",
+    "estado_transferencia", "municipio_transferencia",
+    "pais_residencia",
+    # Notificação
+    "tipo_notificacao", "tipo_entrada", "tipo_unidade_notificante",
+    "tipo_instituicao", "agravo", "arquivo_origem",
+    "status_duplicidade", "status_vinculacao",
+    # Dados pessoais
+    "sexo", "raca_cor", "escolaridade", "gestante", "cbo_ocupacao",
+    # Clínica
+    "forma", "extrapulmonar", "extrapulmonar2",
     "situacao_encerramento", "transferencia",
     "status_hiv", "uso_antirretroviral", "raio_x_torax",
-    "baciloscopia_primeira_amostra", "baciloscopia_segundo_amostra",
+    "teste_tuberculinico",
+    # Bacteriologia
+    "baciloscopia_primeira_amostra", "baciloscopia_segunda_amostra",
     "baciloscopia_outro_material", "cultura_escarro", "cultura_outro_material",
     "histopatologia", "teste_molecular", "teste_sensibilidade",
     "tratamento_supervisionado", "tratamento_supervisionado_atual",
     "baciloscopia_mes_1", "baciloscopia_mes_2", "baciloscopia_mes_3",
     "baciloscopia_mes_4", "baciloscopia_mes_5", "baciloscopia_mes_6",
     "baciloscopia_apos_6_meses",
+    # Resistência
+    "resistencia_rifampicina", "resistencia_isoniazida", "resistencia_etambutol",
+    "resistencia_pirazinamida", "resistencia_etionamida", "resistencia_estreptomicina",
+    "resistencia_outras_drogas",
+    # Agravos e populações
     "agravo_aids", "agravo_alcoolismo", "agravo_diabetes",
     "agravo_doenca_mental", "agravo_outros", "agravo_drogas_ilicitas",
     "agravo_tabagismo",
     "populacao_privada_liberdade", "populacao_situacao_rua",
     "profissional_saude", "populacao_imigrante", "beneficiario_governo",
-    "resistencia_rifampicina", "resistencia_isoniazida", "resistencia_etambutol",
-    "resistencia_pirazinamida", "resistencia_etionamida", "resistencia_estreptomicina",
-    "resistencia_outras_drogas",
-    "status_duplicidade", "status_vinculacao", "doenca_relacionada_trabalho",
-    "tipo_unidade_notificante", "agravo", "arquivo_origem",
-    "situacao_9_meses", "situacao_12_meses", "pais_residencia",
+    # Outros
+    "doenca_relacionada_trabalho",
+    "situacao_9_meses", "situacao_12_meses",
 ]
 
 
 def parse_idade_anos(serie: pd.Series) -> pd.Series:
-    def converter(val):
-        if pd.isna(val):
-            return pd.NA
-        match = re.match(r"(\d+)\s+(ano|mês|dia|hora)", str(val))
-        if not match:
-            return pd.NA
-        numero, unidade = int(match.group(1)), match.group(2)
-        if unidade == "ano":
-            return numero
-        if unidade == "mês":
-            return numero // 12
-        return 0
-    return serie.map(converter).astype("Int16")
+    """Converte 'X anos/meses/dias' para idade em anos (Int16). Vetorizado."""
+    ext = serie.astype(str).str.extract(r"(\d+)\s+(ano|m[eê]s|dia|hora)", expand=True)
+    n = pd.to_numeric(ext[0], errors="coerce")
+    u = ext[1]
+    # anos: valor direto; meses: divisao inteira; dias/horas: 0
+    resultado = n.where(u == "ano", (n // 12).where(u.str.match(r"m[eê]s", na=False), 0))
+    return resultado.astype("Int16")
 
 
 def preparar(df: pd.DataFrame) -> pd.DataFrame:
