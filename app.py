@@ -21,13 +21,7 @@ from src.dados import (
     selecionar_colunas, gerar_html_pygwalker,
 )
 from src import graficos
-from src import mapa_municipios
-
-try:
-    from streamlit_folium import st_folium
-    _FOLIUM_OK = True
-except ImportError:
-    _FOLIUM_OK = False
+from src import mapa_interativo
 
 st.set_page_config(
     page_title="Tuberculose Brasil - SINAN",
@@ -152,58 +146,62 @@ tab_paineis, tab_livre = st.tabs(["Paineis", "Analise Livre"])
 # ── ABA: PAINEIS ───────────────────────────────────────────────────────────────
 with tab_paineis:
 
-    # ── Mapa por estado ────────────────────────────────────────────────────────
-    st.subheader("Casos por Estado")
-    st.caption("Cada estado colorido pela quantidade de notificacoes.")
-    try:
-        geojson = carregar_geojson()
-        st.plotly_chart(
-            graficos.fig_mapa(df, geojson),
-            use_container_width=True, config=PLOTLY_CFG,
-        )
-    except FileNotFoundError:
-        st.warning("GeoJSON nao encontrado. Execute: python scripts/baixar_geojson.py")
+    # ── Mapa interativo com drill-down ────────────────────────────────────────
+    # Inicializa estado de navegação na sessão
+    if "mapa_nivel" not in st.session_state:
+        st.session_state.mapa_nivel = "BR"
+        st.session_state.mapa_uf    = None
 
-    # ── Drill-down por município ───────────────────────────────────────────────
-    st.subheader("Detalhamento por Municipio")
-    st.caption(
-        "Selecione um estado para ver a distribuicao de casos por municipio. "
-        "Passe o mouse sobre o mapa para ver o nome e o numero de notificacoes."
-    )
+    nivel = st.session_state.mapa_nivel
+    uf_sel = st.session_state.mapa_uf
 
-    estados_com_dados = sorted(df["estado_notificacao"].dropna().unique().tolist())
-    estado_drill = st.selectbox(
-        "Estado para detalhar",
-        options=["— Selecione um estado —"] + estados_com_dados,
-        index=0,
-        label_visibility="collapsed",
-    )
+    # Cabeçalho adaptativo
+    if nivel == "UF" and uf_sel:
+        nome_estado = mapa_interativo.uf_para_nome(uf_sel)
+        col_voltar, col_titulo = st.columns([1, 6])
+        with col_voltar:
+            if st.button("← Brasil", key="mapa_voltar", use_container_width=True):
+                st.session_state.mapa_nivel = "BR"
+                st.session_state.mapa_uf    = None
+                st.rerun()
+        with col_titulo:
+            st.subheader(f"Municípios — {nome_estado} ({uf_sel})")
+            df_uf = df[df["estado_notificacao"].map(UF_SIGLAS) == uf_sel]
+            st.caption(
+                f"{len(df_uf):,} notificações  |  "
+                f"{df_uf['municipio_notificacao'].nunique()} municípios  |  "
+                "clique num município para ver detalhes"
+            )
+    else:
+        st.subheader("Casos por Estado")
+        st.caption("Clique num estado para ver a distribuição por município.")
 
-    if estado_drill != "— Selecione um estado —":
-        uf_drill = UF_SIGLAS.get(estado_drill)
-        if uf_drill is None:
-            st.warning(f"Sigla nao encontrada para '{estado_drill}'. Verifique UF_SIGLAS em constantes.py.")
+    # Renderiza o mapa correto e captura cliques
+    if nivel == "UF" and uf_sel:
+        fig_map = mapa_interativo.fig_estado(df, uf_sel)
+        if fig_map.data:
+            st.plotly_chart(fig_map, use_container_width=True,
+                            config=PLOTLY_CFG, key="mapa_estado")
         else:
-            df_estado = df[df["estado_notificacao"] == estado_drill]
-            if df_estado.empty:
-                st.info("Nenhuma notificacao encontrada para este estado com os filtros atuais.")
-            else:
-                st.caption(
-                    f"{len(df_estado):,} notificacoes em {estado_drill} ({uf_drill})  |  "
-                    f"{df_estado['municipio_notificacao'].nunique()} municipios"
-                )
-                with st.spinner(f"Carregando mapa de {estado_drill}..."):
-                    mapa_mun = mapa_municipios.criar_mapa_municipios(df_estado, uf_drill)
-
-                if mapa_mun is None:
-                    st.warning(
-                        f"GeoJSON de municipios nao encontrado para {uf_drill}. "
-                        f"Execute: python scripts/baixar_geojson_municipios.py {uf_drill}"
-                    )
-                elif not _FOLIUM_OK:
-                    st.error("Pacote streamlit-folium nao instalado. Execute: pip install streamlit-folium")
-                else:
-                    st_folium(mapa_mun, use_container_width=True, height=520, returned_objects=[])
+            st.warning(
+                f"GeoJSON de municípios para {uf_sel} não disponível. "
+                "Execute: python scripts/preparar_geo_cache.py"
+            )
+    else:
+        fig_map = mapa_interativo.fig_brasil(df)
+        evento = st.plotly_chart(
+            fig_map, use_container_width=True,
+            config=PLOTLY_CFG, key="mapa_brasil",
+            on_select="rerun",
+        )
+        # Captura clique e faz drill-down
+        pts = (evento or {}).get("selection", {}).get("points", [])
+        if pts:
+            uf_clicada = pts[0].get("location", "")
+            if uf_clicada:
+                st.session_state.mapa_nivel = "UF"
+                st.session_state.mapa_uf    = uf_clicada
+                st.rerun()
 
     st.divider()
 

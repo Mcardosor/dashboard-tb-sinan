@@ -25,7 +25,7 @@ from sqlalchemy import URL, create_engine
 
 load_dotenv()
 
-SCHEMA      = "silver"
+SCHEMA      = "public"
 TABELA      = "sinan_tube"
 PASTA_DADOS = Path("dados_dashboard")
 PASTA_DADOS.mkdir(exist_ok=True)
@@ -61,7 +61,7 @@ for ano in anos:
     inicio = time.time()
 
     df = pd.read_sql(
-        f"SELECT * FROM {SCHEMA}.{TABELA} WHERE ano_notificacao = {ano}",
+        f"SELECT * FROM {SCHEMA}.{TABELA} WHERE ano_notificacao = '{ano}'",
         engine,
     )
 
