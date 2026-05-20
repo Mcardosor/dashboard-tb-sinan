@@ -774,7 +774,7 @@ with tab5:
             except Exception as e:
                 st.warning(f"Erro ao carregar indicadores históricos: {e}")
 
-# ── ABA 6: ANÁLISE LIVRE ──────────────────────────────────────────────────────
+# ── ABA 6: ANÁLISE LIVRE ──────────────────────────────────────────────────────────────────────────────
 with tab6:
     st.subheader("Análise Livre")
     st.caption("Monte seus próprios gráficos arrastando e soltando os campos.")
