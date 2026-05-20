@@ -35,28 +35,41 @@ def safe_pie(df_plot: pd.DataFrame, names: str, values: str,
     if df_plot.empty or df_plot[values].sum() == 0:
         grafico_vazio()
         return
-    color_map  = tb_color_map(df_plot[names].astype(str).tolist())
-    total_val  = df_plot[values].sum()
+    color_map = tb_color_map(df_plot[names].astype(str).tolist())
+    total_val = df_plot[values].sum()
     fig = px.pie(df_plot, names=names, values=values,
                  color=names, color_discrete_map=color_map, hole=0.45)
     tb_layout(fig, titulo=titulo, altura=height)
     fig.update_layout(
-        legend=dict(orientation="v", x=1.0, y=0.5,
-                    font=dict(color="#c9d1d9", size=11)),
-        margin={"t": 40 if titulo else 20, "r": 20, "l": 20, "b": 20},
+        # Legenda horizontal embaixo — evita overflow lateral
+        legend=dict(
+            orientation="h",
+            x=0.5, xanchor="center",
+            y=-0.18, yanchor="top",
+            font=dict(color="#c9d1d9", size=11),
+            bgcolor="rgba(0,0,0,0)",
+        ),
+        margin={"t": 20, "r": 10, "l": 10, "b": 80},
+        uniformtext_minsize=9,
+        uniformtext_mode="hide",
     )
     fig.update_traces(
         textfont_color="#f0f6fc", textfont_size=11,
-        textinfo="percent", insidetextorientation="radial",
+        # Mostra % apenas dentro de fatias com mais de 6% — oculta fatias pequenas
+        textinfo="percent",
+        insidetextorientation="horizontal",
         marker=dict(line=dict(color="#0d1117", width=2)),
         hovertemplate="<b>%{label}</b><br>Casos: %{value:,}<br>"
                       "Participação: %{percent}<extra></extra>",
+        texttemplate="%{percent:.1%}",
     )
+    # Zera rótulo das fatias menores que 6% para não sobrepor
     fig.for_each_trace(lambda t: t.update(
-        text=["" if (v / total_val) < 0.04 else f"{v/total_val:.0%}"
+        text=["" if (v / total_val) < 0.06 else f"{v/total_val:.1%}"
               for v in df_plot[values]]
     ))
-    st.plotly_chart(fig, use_container_width=True, config={"scrollZoom": False})
+    st.plotly_chart(fig, use_container_width=True,
+                    config={"displayModeBar": False, "scrollZoom": False})
 
 
 def safe_bar_h(df_plot: pd.DataFrame, x: str, y: str,
