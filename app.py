@@ -163,11 +163,15 @@ st.markdown("""
   .stTabs [data-baseweb="tab-list"] {
     gap: 4px; background: rgba(22,27,34,.5); padding: 6px;
     border-radius: 12px; border: 1px solid #30363d;
+    flex-wrap: wrap !important;
+    overflow-x: auto;
   }
   .stTabs [data-baseweb="tab"] {
-    padding: 8px 16px !important; border-radius: 8px !important;
+    padding: 8px 14px !important; border-radius: 8px !important;
     font-weight: 600 !important; font-size: 13px !important;
     transition: background .15s ease; color: #8b949e;
+    white-space: nowrap;
+    flex-shrink: 0;
   }
   .stTabs [data-baseweb="tab"]:hover { background: rgba(255,255,255,.04); }
   .stTabs [aria-selected="true"] {
@@ -221,10 +225,13 @@ st.markdown("""
       gap: 2px !important;
       padding: 4px !important;
       flex-wrap: wrap !important;
+      overflow-x: auto !important;
     }
     .stTabs [data-baseweb="tab"] {
       font-size: 11px !important;
       padding: 6px 8px !important;
+      flex: 1 1 auto !important;
+      text-align: center !important;
     }
     .block-container {
       padding-left: 0.5rem !important;
