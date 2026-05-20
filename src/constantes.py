@@ -342,15 +342,15 @@ def kpi_card_html(title, value, delta_html, icon, accent, selected):
     sel   = "kpi-selected" if selected else ""
     delta = delta_html.strip() if delta_html else ""
     return (
-        f'<div class="kpi-card {sel}" style="--accent:{accent};">'
-        f'<div class="kpi-inner">'
-        f'<div class="kpi-bar"></div>'
-        f'<div class="kpi-body">'
-        f'<div class="kpi-label">{title}</div>'
-        f'<div class="kpi-value">{value}</div>'
-        f'{delta}'
-        f'</div>'
-        f'<div class="kpi-icon">{icon}</div>'
-        f'</div>'
+        f'<div class="kpi-card {sel}" style="--accent:{accent};">' 
+        f'<div class="kpi-inner">' 
+        f'<div class="kpi-bar"></div>' 
+        f'<div class="kpi-body">' 
+        f'<div class="kpi-label">{title}</div>' 
+        f'<div class="kpi-value">{value}</div>' 
+        f'{delta}' 
+        f'</div>' 
+        f'<div class="kpi-icon">{icon}</div>' 
+        f'</div>' 
         f'</div>'
     )

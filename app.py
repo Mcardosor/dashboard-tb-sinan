@@ -189,6 +189,63 @@ st.markdown("""
   iframe[title="streamlit_folium.st_folium"] {
     border-radius: 12px; border: 1px solid #30363d; overflow: hidden;
   }
+
+  /* ── Responsividade — Tablet (≤1024px) ──────────────────── */
+  @media (max-width: 1024px) {
+    .hero-title    { font-size: 26px !important; }
+    .hero-subtitle { font-size: 13px; }
+    .block-container {
+      padding-left: 1rem !important;
+      padding-right: 1rem !important;
+    }
+  }
+
+  /* ── Responsividade — Mobile (≤768px) ───────────────────── */
+  @media (max-width: 768px) {
+    .hero          { padding: 18px 16px 16px 16px !important; }
+    .hero-title    { font-size: 20px !important; }
+    .hero-emoji    { font-size: 24px !important; }
+    .hero-subtitle { font-size: 12px; margin-bottom: 10px; }
+    .hero-badge    { font-size: 10px !important; padding: 3px 8px !important; }
+
+    [data-testid="stHorizontalBlock"] { flex-wrap: wrap !important; }
+    [data-testid="column"] {
+      min-width: calc(50% - 0.5rem) !important;
+      flex: 0 0 calc(50% - 0.5rem) !important;
+    }
+    .kpi-value { font-size: 18px !important; }
+    .kpi-label { font-size: 9px !important; }
+    .kpi-icon  { width: 28px !important; height: 28px !important; font-size: 13px !important; }
+
+    .stTabs [data-baseweb="tab-list"] {
+      gap: 2px !important;
+      padding: 4px !important;
+      flex-wrap: wrap !important;
+    }
+    .stTabs [data-baseweb="tab"] {
+      font-size: 11px !important;
+      padding: 6px 8px !important;
+    }
+    .block-container {
+      padding-left: 0.5rem !important;
+      padding-right: 0.5rem !important;
+    }
+  }
+
+  /* ── Responsividade — Mobile pequeno (≤480px) ────────────── */
+  @media (max-width: 480px) {
+    [data-testid="column"] {
+      min-width: 100% !important;
+      flex: 0 0 100% !important;
+    }
+    .hero-title  { font-size: 17px !important; }
+    .hero-badges { flex-wrap: wrap; gap: 4px; }
+    .hero-badge  { font-size: 9px !important; }
+    .stTabs [data-baseweb="tab"] {
+      font-size: 10px !important;
+      padding: 5px 6px !important;
+    }
+  }
 </style>
 """, unsafe_allow_html=True)
 
