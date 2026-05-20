@@ -154,16 +154,16 @@ TB_COLORS = {
     "TB-DR":                    "#cf222e",
     "Transferencia":            "#1f6feb",
     "Transferência":            "#1f6feb",
-    "Mudanca de Esquema":       "#8b949e",
-    "Mudança de Esquema":       "#8b949e",
-    "Mudança Diagnóstico":      "#6e7681",
+    "Mudanca de Esquema":       "#ffa657",
+    "Mudança de Esquema":       "#ffa657",
+    "Mudança Diagnóstico":      "#f0b342",
     "Em acompanhamento":        "#388bfd",
     # HIV
     "Positivo":                 "#da3633",
     "Negativo":                 "#3fb950",
     "Em andamento":             "#d29922",
-    "Não realizado":            "#6e7681",
-    "Nao realizado":            "#6e7681",
+    "Não realizado":            "#a371f7",
+    "Nao realizado":            "#a371f7",
     # Sexo
     "Masculino":                "#58a6ff",
     "Feminino":                 "#f778ba",
@@ -171,20 +171,20 @@ TB_COLORS = {
     "Sim":                      "#da3633",
     "Não":                      "#3fb950",
     "Nao":                      "#3fb950",
-    "Ignorado":                 "#6e7681",
+    "Ignorado":                 "#d29922",
     # Baciloscopia / TMR
     "Positiva":                 "#da3633",
     "Negativa":                 "#3fb950",
-    "Não realizada":            "#6e7681",
-    "Nao realizada":            "#6e7681",
-    "Não se aplica":            "#484f58",
+    "Não realizada":            "#a371f7",
+    "Nao realizada":            "#a371f7",
+    "Não se aplica":            "#79c0ff",
     "Detectável sensível":      "#d29922",
     "Detectavel sensivel":      "#d29922",
     "Detectável resistente":    "#da3633",
     "Detectavel resistente":    "#da3633",
     "Não detectável":           "#3fb950",
     "Nao detectavel":           "#3fb950",
-    "Inconclusivo":             "#8b949e",
+    "Inconclusivo":             "#d2a8ff",
     # Raça
     "Branca":                   "#79c0ff",
     "Preta":                    "#a371f7",
@@ -200,8 +200,8 @@ TB_COLORS = {
     "Caso Novo":                "#3fb950",
     "Recidiva":                 "#d29922",
     "Reingresso Abandono":      "#f0883e",
-    "Não Sabe":                 "#6e7681",
-    "Nao Sabe":                 "#6e7681",
+    "Não Sabe":                 "#d29922",
+    "Nao Sabe":                 "#d29922",
     "Pos-obito":                "#a40e26",
     "Pós-óbito":                "#a40e26",
 }
@@ -266,8 +266,8 @@ PLOTLY_CFG = {"scrollZoom": False}
 def tb_layout(fig, titulo=None, altura=None):
     """Aplica template TB padronizado em uma figura Plotly."""
     fig.update_layout(**PLOTLY_TEMPLATE["layout"])
-    if titulo:
-        fig.update_layout(title_text=titulo)
+    # Sempre define title_text para evitar que browsers renderizem "undefined"
+    fig.update_layout(title_text=titulo if titulo else "")
     if altura:
         fig.update_layout(height=altura)
     return fig
