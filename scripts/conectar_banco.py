@@ -4,8 +4,8 @@ conectar_banco.py
 Exporta dados do PostgreSQL (schema silver) para Parquet local, por ano.
 
 Uso:
-    python scripts/conectar_banco.py           # exporta 2025 (padrão)
-    python scripts/conectar_banco.py 2024      # exporta um ano específico
+    python scripts/conectar_banco.py           # exporta 2025 (padrao)
+    python scripts/conectar_banco.py 2024      # exporta um ano especifico
     python scripts/conectar_banco.py 2020 2025 # exporta um intervalo de anos
 
 Arquivos gerados em dados_dashboard/:
@@ -25,12 +25,12 @@ from sqlalchemy import URL, create_engine
 
 load_dotenv()
 
-SCHEMA      = "public"
+SCHEMA      = "silver"
 TABELA      = "sinan_tube"
 PASTA_DADOS = Path("dados_dashboard")
 PASTA_DADOS.mkdir(exist_ok=True)
 
-# ── Determina anos a exportar via argumento CLI ───────────────────────────────
+# -- Determina anos a exportar via argumento CLI ------------------------------
 args = sys.argv[1:]
 if len(args) == 0:
     anos = [2025]
@@ -42,7 +42,7 @@ else:
     print("Uso: python conectar_banco.py [ano_inicio] [ano_fim]")
     sys.exit(1)
 
-# ── Conexão ───────────────────────────────────────────────────────────────────
+# -- Conexao ------------------------------------------------------------------
 url = URL.create(
     drivername="postgresql+psycopg2",
     username=os.getenv("DB_USER"),
@@ -51,9 +51,9 @@ url = URL.create(
     port=int(os.getenv("DB_PORT", "5432")),
     database=os.getenv("DB_NAME"),
 )
-engine = create_engine(url, pool_pre_ping=True)
+engine = create_engine(url, pool_pre_ping=True, connect_args={"sslmode": "disable"})
 
-# ── Exportação por ano ────────────────────────────────────────────────────────
+# -- Exportacao por ano -------------------------------------------------------
 for ano in anos:
     saida = PASTA_DADOS / f"sinan_tube_{ano}.parquet"
 
@@ -66,11 +66,12 @@ for ano in anos:
     )
 
     elapsed = time.time() - inicio
-    print(f"  ✅ {len(df):,} registros em {elapsed:.1f}s")
+    print(f"  OK  {len(df):,} registros em {elapsed:.1f}s")
 
     df.to_parquet(saida, index=False, compression="snappy")
     tamanho_mb = saida.stat().st_size / 1024 / 1024
-    print(f"  💾 Salvo em: {saida}  ({tamanho_mb:.1f} MB)")
+    print(f"  Salvo em: {saida}  ({tamanho_mb:.1f} MB)")
 
-print(f"\n✅ Exportação concluída: {len(anos)} ano(s)")
-print("Proximo passo: python scripts/preparar_dados.py ANO")
+n = len(anos)
+print(f"\nExportacao concluida: {n} ano(s)")
+print("Proximo passo: python scripts/preparar_dados.py ANO_INICIO ANO_FIM")

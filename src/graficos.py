@@ -719,11 +719,12 @@ def fig_indicadores_historicos(df_ind: pd.DataFrame, sel_ind: list[str],
         return
 
     fig_ind = go.Figure()
+    df_ind_sorted = df_ind.sort_values("nu_ano")
+    df_ind_sorted["nu_ano"] = pd.to_numeric(df_ind_sorted["nu_ano"], errors="coerce").astype(int)
     for nome in cols_disp:
         col = opcoes_col[nome]
-        df_ind_sorted = df_ind.sort_values("nu_ano")
         fig_ind.add_trace(go.Scatter(
-            x=df_ind_sorted["nu_ano"].astype(str),
+            x=df_ind_sorted["nu_ano"],
             y=df_ind_sorted[col],
             mode="lines+markers",
             name=nome,
@@ -731,11 +732,15 @@ def fig_indicadores_historicos(df_ind: pd.DataFrame, sel_ind: list[str],
             marker=dict(size=6, line=dict(color="#0d1117", width=1)),
             hovertemplate=f"<b>{nome}</b><br>Ano: %{{x}}<br>Valor: %{{y:.1f}}<extra></extra>",
         ))
-    # Destaca ano selecionado
-    fig_ind.add_vline(x=str(ano_sel), line_dash="dot",
-                      line_color="#f78166", line_width=1.5,
-                      annotation_text=str(ano_sel),
-                      annotation_font=dict(color="#f78166", size=11))
+    # Destaca ano selecionado (eixo numerico — add_vline funciona normalmente)
+    anos_disp = df_ind_sorted["nu_ano"].tolist()
+    if ano_sel in anos_disp:
+        fig_ind.add_vline(
+            x=ano_sel, line_dash="dot",
+            line_color="#f78166", line_width=1.5,
+            annotation_text=str(ano_sel),
+            annotation_font=dict(color="#f78166", size=11),
+        )
     tb_layout(fig_ind, altura=420)
     fig_ind.update_layout(
         xaxis=dict(title="Ano", tickangle=-45),

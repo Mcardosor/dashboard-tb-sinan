@@ -32,7 +32,7 @@ from src.constantes import (
 )
 from src.dados import (
     carregar_dados, carregar_geojson,
-    selecionar_colunas, gerar_html_pygwalker,
+    selecionar_colunas, render_pygwalker,
     enriquecer_df, load_historico,
 )
 from src import graficos
@@ -862,5 +862,4 @@ with tab6:
         icon="📊",
     )
     spec = SPEC_PATH if Path(SPEC_PATH).exists() else None
-    html = gerar_html_pygwalker(df_analise, spec_path=spec)
-    components.html(html, height=1000, scrolling=True)
+    render_pygwalker(df_analise, spec_path=spec)

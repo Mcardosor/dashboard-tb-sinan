@@ -44,20 +44,22 @@ def selecionar_colunas(df: pd.DataFrame, colunas: tuple) -> pd.DataFrame:
     return df[[c for c in colunas if c in df.columns]]
 
 
-@st.cache_data(
-    show_spinner="Preparando analise livre...",
-    hash_funcs={pd.DataFrame: lambda df: (df.shape, df.columns.tolist())},
-)
-def gerar_html_pygwalker(df: pd.DataFrame, spec_path: str | None = None) -> str:
-    """Gera o HTML do PyGWalker, opcionalmente com spec pre-configurado."""
+def render_pygwalker(df: pd.DataFrame, spec_path: str | None = None) -> None:
+    """Renderiza o PyGWalker diretamente no Streamlit (API 0.4+)."""
     try:
-        import pygwalker as pyg
-        kwargs: dict = {"appearance": "dark"}
-        if spec_path and Path(spec_path).exists():
-            kwargs["spec"] = spec_path
-        return pyg.to_html(df, **kwargs)
-    except Exception as e:
-        return f"<p style='color:#f85149'>PyGWalker indisponível: {e}</p>"
+        from pygwalker.api.streamlit import StreamlitRenderer
+        kwargs: dict = {"appearance": "dark", "spec": spec_path} if (spec_path and Path(spec_path).exists()) else {"appearance": "dark"}
+        renderer = StreamlitRenderer(df, **kwargs)
+        renderer.explorer()
+    except ImportError:
+        # fallback para versões antigas
+        try:
+            import pygwalker as pyg
+            import streamlit.components.v1 as components
+            html = pyg.to_html(df, appearance="dark")
+            components.html(html, height=1000, scrolling=True)
+        except Exception as e:
+            st.error(f"PyGWalker indisponível: {e}")
 
 
 def enriquecer_df(df: pd.DataFrame) -> pd.DataFrame:
