@@ -169,14 +169,27 @@ st.markdown("""
   .stTabs [data-baseweb="tab"] {
     padding: 8px 14px !important; border-radius: 8px !important;
     font-weight: 600 !important; font-size: 13px !important;
-    transition: background .15s ease; color: #8b949e;
+    color: #8b949e;
     white-space: nowrap;
-    flex-shrink: 0;
+    flex: 1 1 auto !important;     /* preenche a linha inteira */
+    text-align: center !important;
+    cursor: pointer !important;
+    border: 1px solid transparent !important;
+    transition: background .15s ease, border-color .15s ease,
+                color .15s ease, transform .1s ease !important;
   }
-  .stTabs [data-baseweb="tab"]:hover { background: rgba(255,255,255,.04); }
+  .stTabs [data-baseweb="tab"]:hover {
+    background: rgba(255,255,255,.07) !important;
+    border-color: #30363d !important;
+    color: #c9d1d9 !important;
+    transform: translateY(-1px);
+  }
   .stTabs [aria-selected="true"] {
     background: rgba(247,129,102,.15) !important;
-    color: #f0f6fc !important; border-bottom-color: transparent !important;
+    border-color: rgba(247,129,102,.35) !important;
+    color: #f0f6fc !important;
+    border-bottom-color: transparent !important;
+    box-shadow: 0 2px 8px rgba(247,129,102,.15) !important;
   }
   .stTabs [data-baseweb="tab-panel"] { padding-top: 1.25rem; }
 
