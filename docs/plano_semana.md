@@ -1,5 +1,5 @@
 # Plano de Trabalho — Semana do Seminário
-**Prazo: Sexta-feira | Apresentação: Segunda-feira**
+**Prazo: Sexta-feira | Apresentação: Segunda-feira 25/05**
 
 ---
 
@@ -32,20 +32,22 @@
 
 ### 🔴 Alta prioridade (até quinta)
 
-1. **Aba de Tendência Histórica**
-   - Evolução anual de casos (linha do tempo 2001–2025)
-   - Requer rodar conectar_banco.py + preparar_dados.py para anos anteriores
-   - Usar agregados leves (não carrega todos os Parquets ao mesmo tempo)
+1. **Dados históricos do banco**
+   - Rodar `python scripts/conectar_banco.py 2001 2024`
+   - Rodar `python scripts/preparar_dados.py 2001 2024`
+   - Gerar `historico_mensal.csv`, `historico_estadual.csv`, `historico_anual.csv`
+   - Habilita a aba Tendência com série temporal 2001–2025
 
-2. **Mapa drill-down por município**
+2. **Aba de Tendência Histórica completa**
+   - Evolução anual de casos (linha do tempo 2001–2025)
+   - Usa agregados leves (não carrega todos os Parquets ao mesmo tempo)
+   - Indicadores com multiselect (10 métricas)
+
+3. **Mapa drill-down por município**
    - Clicar num estado → ver municípios daquele estado
-   - GeoJSON de municípios carregado por estado (leve, ~300 KB/estado)
+   - GeoJSON de municípios carregado por estado (~300 KB/estado)
 
 ### 🟡 Média prioridade (se der tempo)
-
-3. **Aba Clínico & Diagnóstico**
-   - Coinfecção TB-HIV por estado
-   - Resultados de baciloscopia e teste molecular (TMR-TB)
 
 4. **Relatórios para prestação de contas**
    - Relatório técnico (stack, decisões, o que foi feito)
@@ -64,9 +66,9 @@
 
 | Dia | Status | Foco |
 |-----|--------|------|
-| Segunda/Terça | ✅ Feito | Novo repo, estrutura, filtros, 7 painéis |
-| Quarta | 🔄 Hoje | Aba de tendência histórica |
-| Quinta | ⏳ | Dados históricos (banco) + indicadores série temporal |
-| Sexta | ⏳ | Relatório técnico + ensaio |
-| Segunda | 🎯 | Seminário |
-
+| Segunda (18/05) | ✅ Feito | Migração visual + recomendações Raquel |
+| Terça (19/05) | ⏳ | Dados históricos (conectar banco, preparar 2001–2024) |
+| Quarta (20/05) | ⏳ | Aba Tendência histórica completa + indicadores |
+| Quinta (21/05) | ⏳ | Mapa drill-down municípios |
+| Sexta (22/05) | ⏳ | Relatório técnico + ensaio da apresentação |
+| Segunda (25/05) | 🎯 | **Seminário** |

@@ -450,11 +450,11 @@ with tab1:
     # Raquel ponto 1: padronizar "por 100 mil hab." em vez de "100k"
     _cfg = {
         "casos":       ("casos",       "Total de Casos por Estado",
-                        "Total de Casos",                   "YlOrRd", TB_SEQ_INCIDENCIA),
+                        "Total de Casos",                   "YlOrRd", "YlOrRd"),
         "incidencia":  ("incidencia",  "Coeficiente de Incidência por 100 mil hab. — Brasil",
-                        "Incidência por 100 mil hab.",      "YlOrRd", TB_SEQ_INCIDENCIA),
+                        "Incidência por 100 mil hab.",      "YlOrRd", "YlOrRd"),
         "mortalidade": ("mortalidade", "Coeficiente de Mortalidade por 100 mil hab. — Brasil",
-                        "Mortalidade por 100 mil hab.",     "OrRd",   TB_SEQ_MORTAL),
+                        "Mortalidade por 100 mil hab.",     "OrRd",   "OrRd"),
     }
     _col_mapa, _titulo_mapa, _leg_mapa, _pal_folium, _pal_plotly = _cfg.get(_metric, _cfg["casos"])
 
@@ -534,13 +534,16 @@ with tab1:
             st.plotly_chart(fig_uf, use_container_width=True, config=PLOTLY_CFG)
 
 # ── ABA 2: PERFIL — pirâmide de casos + pirâmide de óbitos (Raquel ponto 5) ──
+_INVAL = ["nan", "None", "undefined", "Nao informado", "Não informado", "Ignorado", ""]
+
 with tab2:
-    c1, c2, c3 = st.columns(3)
+    c1, c2 = st.columns(2)
     with c1:
         st.subheader("Por Sexo")
         if "sexo" in df.columns:
             d = df["sexo"].value_counts().reset_index()
             d.columns = ["Sexo", "Casos"]
+            d = d[~d["Sexo"].isin(_INVAL)]
             graficos.safe_pie(d, "Sexo", "Casos", height=H_SMALL)
         else:
             grafico_vazio()
@@ -549,14 +552,18 @@ with tab2:
         if "forma" in df.columns:
             d = df["forma"].value_counts().reset_index()
             d.columns = ["Forma", "Casos"]
+            d = d[~d["Forma"].isin(_INVAL)]
             graficos.safe_pie(d, "Forma", "Casos", height=H_SMALL)
         else:
             grafico_vazio()
-    with c3:
+
+    _, c3mid, _ = st.columns([1, 2, 1])
+    with c3mid:
         st.subheader("Tipo de Entrada")
         if "tipo_entrada" in df.columns:
             d = df["tipo_entrada"].value_counts().reset_index()
             d.columns = ["Tipo", "Casos"]
+            d = d[~d["Tipo"].isin(_INVAL)]
             graficos.safe_pie(d, "Tipo", "Casos", height=H_SMALL)
         else:
             grafico_vazio()
@@ -578,8 +585,8 @@ with tab2:
         if col_enc in df.columns:
             d = df[col_enc].value_counts().reset_index()
             d.columns = ["Situação", "Casos"]
-            d = d[~d["Situação"].isin(["nan", "None"])]
-            graficos.safe_bar_h(d.sort_values("Casos", ascending=True), "Casos", "Situação", height=H_MEDIUM)
+            d = d[~d["Situação"].isin(_INVAL)]
+            graficos.safe_bar_h(d.sort_values("Casos", ascending=False), "Casos", "Situação", height=H_MEDIUM)
         else:
             grafico_vazio()
 
@@ -605,12 +612,13 @@ with tab2:
 
 # ── ABA 3: CLÍNICO — Raquel ponto 6: Desfecho por status HIV ─────────────────
 with tab3:
-    c1, c2, c3 = st.columns(3)
+    c1, c2 = st.columns(2)
     with c1:
         st.subheader("Status HIV")
         if "status_hiv" in df.columns:
             d = df["status_hiv"].value_counts().reset_index()
             d.columns = ["HIV", "Casos"]
+            d = d[~d["HIV"].isin(_INVAL)]
             graficos.safe_pie(d, "HIV", "Casos", height=H_SMALL)
         else:
             grafico_vazio()
@@ -619,14 +627,18 @@ with tab3:
         if "baciloscopia_primeira_amostra" in df.columns:
             d = df["baciloscopia_primeira_amostra"].value_counts().reset_index()
             d.columns = ["Resultado", "Casos"]
+            d = d[~d["Resultado"].isin(_INVAL)]
             graficos.safe_pie(d, "Resultado", "Casos", height=H_SMALL)
         else:
             grafico_vazio()
-    with c3:
+
+    _, c3mid2, _ = st.columns([1, 2, 1])
+    with c3mid2:
         st.subheader("Teste Molecular Rápido (TMR-TB)")
         if "teste_molecular" in df.columns:
             d = df["teste_molecular"].value_counts().reset_index()
             d.columns = ["Resultado", "Casos"]
+            d = d[~d["Resultado"].isin(_INVAL)]
             graficos.safe_pie(d, "Resultado", "Casos", height=H_SMALL)
         else:
             grafico_vazio()

@@ -95,7 +95,7 @@ NORMALIZAR_DESFECHO = {
 # ── Paletas de cores legadas (mantidas para fig_mapa / fig_piramide) ───────────
 CORES_DESFECHOS = {
     "Cura":                    "#2ea043",
-    "Em acompanhamento":       "#8b949e",
+    "Em acompanhamento":       "#388bfd",
     "Transferencia":           "#58a6ff",
     "Mudanca de Esquema":      "#d29922",
     "Abandono Primario":       "#bb8009",
@@ -143,7 +143,7 @@ TB_COLORS = {
     "Mudanca de Esquema":       "#8b949e",
     "Mudança de Esquema":       "#8b949e",
     "Mudança Diagnóstico":      "#6e7681",
-    "Em acompanhamento":        "#484f58",
+    "Em acompanhamento":        "#388bfd",
     # HIV
     "Positivo":                 "#da3633",
     "Negativo":                 "#3fb950",

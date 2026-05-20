@@ -129,4 +129,4 @@ streamlit run app.py
 
 ---
 
-*Relatório gerado em 18/05/2026 — dia do seminário*
+*Relatório gerado em 18/05/2026 — semana do seminário*
