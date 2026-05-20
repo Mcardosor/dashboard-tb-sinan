@@ -36,6 +36,7 @@ from src.dados import (
     enriquecer_df, load_historico,
 )
 from src import graficos
+from src import mapa_interativo
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  CONFIG & CSS

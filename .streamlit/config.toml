@@ -3,3 +3,8 @@ base = "dark"
 
 [server]
 maxUploadSize = 50
+runOnSave = false
+fileWatcherType = "none"
+
+[client]
+showErrorDetails = false

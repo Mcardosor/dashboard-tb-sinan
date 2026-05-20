@@ -25,7 +25,7 @@ from sqlalchemy import URL, create_engine
 
 load_dotenv()
 
-SCHEMA      = "silver"
+SCHEMA      = "public"
 TABELA      = "sinan_tube"
 PASTA_DADOS = Path("dados_dashboard")
 PASTA_DADOS.mkdir(exist_ok=True)
@@ -48,7 +48,7 @@ url = URL.create(
     username=os.getenv("DB_USER"),
     password=os.getenv("DB_PASSWORD"),
     host=os.getenv("DB_HOST"),
-    port=int(os.getenv("DB_PORT")),
+    port=int(os.getenv("DB_PORT", "5432")),
     database=os.getenv("DB_NAME"),
 )
 engine = create_engine(url, pool_pre_ping=True)
@@ -61,7 +61,7 @@ for ano in anos:
     inicio = time.time()
 
     df = pd.read_sql(
-        f"SELECT * FROM {SCHEMA}.{TABELA} WHERE ano_notificacao = {ano}",
+        f"SELECT * FROM {SCHEMA}.{TABELA} WHERE ano_notificacao = '{ano}'",
         engine,
     )
 
@@ -73,4 +73,4 @@ for ano in anos:
     print(f"  💾 Salvo em: {saida}  ({tamanho_mb:.1f} MB)")
 
 print(f"\n✅ Exportação concluída: {len(anos)} ano(s)")
-print("Próximo passo: python scripts/preparar_dados.py [ano]")
+print("Proximo passo: python scripts/preparar_dados.py ANO")
