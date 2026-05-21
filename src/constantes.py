@@ -271,6 +271,34 @@ H_MEDIUM = 380
 H_LARGE  = 480
 
 
+
+# ── Colunas carregadas do Parquet pelo dashboard ───────────────────────────────
+# Subconjunto das 89 colunas do SINAN — exclui campos nunca usados nas abas
+# (transferências internas, resistências individuais, campos de controle SINAN).
+# Reduz carga de memória em ~44% vs SELECT *.
+COLUNAS_DASHBOARD = (
+    "ano_notificacao", "data_notificacao", "data_diagnostico",
+    "data_inicio_tratamento", "data_encerramento",
+    "estado_notificacao", "municipio_notificacao", "uf_residencia", "municipio_residencia",
+    "sexo", "raca_cor", "idade_anos", "escolaridade", "ano_nascimento",
+    "tipo_entrada", "forma", "extrapulmonar",
+    "situacao_encerramento",
+    "status_hiv", "uso_antirretroviral",
+    "raio_x_torax", "teste_tuberculinico",
+    "baciloscopia_primeira_amostra", "cultura_escarro", "histopatologia",
+    "teste_molecular", "teste_sensibilidade",
+    "tratamento_supervisionado",
+    "baciloscopia_mes_1", "baciloscopia_mes_2", "baciloscopia_mes_3",
+    "baciloscopia_mes_4", "baciloscopia_mes_5", "baciloscopia_mes_6",
+    "baciloscopia_apos_6_meses",
+    "agravo_aids", "agravo_alcoolismo", "agravo_diabetes",
+    "agravo_doenca_mental", "agravo_drogas_ilicitas", "agravo_tabagismo", "agravo_outros",
+    "populacao_privada_liberdade", "populacao_situacao_rua",
+    "profissional_saude", "populacao_imigrante", "beneficiario_governo",
+    "numero_contatos", "numero_contatos_examinados",
+    "tipo_notificacao",
+)
+
 # ── Colunas expostas na Análise Livre ─────────────────────────────────────────
 COLUNAS_ANALISE = (
     "estado_notificacao", "municipio_notificacao", "uf_residencia",

@@ -21,17 +21,16 @@ from src.constantes import (
 @st.cache_data(show_spinner="Carregando dados...")
 def carregar_dados(anos: tuple) -> pd.DataFrame:
     """
-    Carrega os dados de um ou mais anos via DuckDB.
-    - anos: tupla ordenada de inteiros, ex: (2022,) ou (2020, 2021, 2022)
-    - Leitura colunar: só traz os anos solicitados do Parquet
+    Carrega os dados de um ou mais anos via DuckDB (máx. 3 anos).
+    - anos: tupla ordenada de inteiros, ex: (2022,) ou (2022, 2023, 2024)
+    - Leitura colunar: só as colunas usadas pelo dashboard (COLUNAS_DASHBOARD)
     - cache_data: resultado cacheado pela combinação de anos
     """
     from src.banco import query
-    placeholders = ", ".join("?" * len(anos))
-    params = [str(a) for a in anos]
+    # Literais em vez de params — mais seguro com IN e múltiplos valores
+    anos_literais = ", ".join(f"'{a}'" for a in anos)
     return query(
-        f"SELECT * FROM sinan WHERE CAST(ano_notificacao AS VARCHAR) IN ({placeholders})",
-        params,
+        f"SELECT * FROM sinan WHERE CAST(ano_notificacao AS VARCHAR) IN ({anos_literais})"
     )
 
 

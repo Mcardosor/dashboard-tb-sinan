@@ -277,14 +277,18 @@ with st.sidebar:
     st.markdown("## 🫁 TB · SINAN")
 
     anos = anos_disponiveis()
+    MAX_ANOS = 3
     anos_sel = st.multiselect(
         "📅 Ano de notificação",
         options=anos,
         default=[anos[0]],
-        help="Selecione um ou mais anos para comparar períodos.",
+        max_selections=MAX_ANOS,
+        help=f"Selecione até {MAX_ANOS} anos. Mais anos = mais tempo de carga.",
     )
     if not anos_sel:
         anos_sel = [anos[0]]
+    if len(anos_sel) > 2:
+        st.caption(f"⚡ {len(anos_sel)} anos selecionados — carregamento pode levar alguns segundos.")
 
     anos_key = tuple(sorted(anos_sel))
     df_completo = carregar_dados(anos_key)
