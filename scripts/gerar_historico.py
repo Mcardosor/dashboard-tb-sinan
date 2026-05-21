@@ -25,7 +25,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import duckdb
-from src.constantes import PASTA_DADOS
+from src.constantes import PASTA_DADOS, UF_SIGLAS
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
 args = sys.argv[1:]
@@ -79,7 +79,7 @@ print("[2/4] historico_estadual.csv...")
 estadual = con.execute("""
     SELECT
         CAST(ano_notificacao AS INTEGER) AS nu_ano,
-        estado_notificacao               AS uf_sigla,
+        estado_notificacao               AS estado,
         COUNT(*)                         AS casos
     FROM sinan
     WHERE estado_notificacao IS NOT NULL
@@ -87,6 +87,11 @@ estadual = con.execute("""
     GROUP BY 1, 2
     ORDER BY 1, 2
 """).df()
+# Converte nome completo → sigla (mesmo mapeamento usado no dashboard)
+estadual["uf_sigla"] = estadual["estado"].map(UF_SIGLAS).fillna("?")
+estadual = (estadual[estadual["uf_sigla"] != "?"]
+            [["nu_ano", "uf_sigla", "casos"]]
+            .sort_values(["nu_ano", "uf_sigla"]))
 estadual.to_csv(PASTA_DADOS / "historico_estadual.csv", index=False)
 print(f"      {len(estadual)} linhas")
 

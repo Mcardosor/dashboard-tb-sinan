@@ -322,16 +322,16 @@ def fig_coinfeccao_hiv_uf(df: pd.DataFrame) -> None:
     coinfec["pct"] = (coinfec["hiv_pos"] / coinfec["total"] * 100).round(1)
     coinfec = coinfec.sort_values("pct", ascending=True)
     fig = px.bar(coinfec, x="pct", y="uf_sigla", orientation="h",
-                 color="pct", color_continuous_scale=TB_SEQ_MORTAL,
                  labels={"pct": "% coinfecção HIV", "uf_sigla": "Estado"}, text="pct")
     tb_layout(fig, altura=H_LARGE)
     fig.update_traces(
+        marker_color="#da3633",
         texttemplate="%{text:.1f}%", textposition="outside",
         textfont=dict(color="#c9d1d9", size=11),
         hovertemplate="<b>%{y}</b><br>Coinfecção HIV: %{x:.1f}%<extra></extra>",
         marker_line_color="#0d1117", marker_line_width=1,
     )
-    fig.update_layout(showlegend=False, coloraxis_showscale=False,
+    fig.update_layout(showlegend=False,
                       xaxis=dict(title="% coinfecção HIV"), yaxis=dict(title=""))
     st.plotly_chart(fig, use_container_width=True, config={"scrollZoom": False})
 

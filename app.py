@@ -598,6 +598,12 @@ with tab1:
 
     with col_uf:
         st.subheader(_leg_mapa + " por Estado")
+        if _metric == "incidencia":
+            st.caption("📌 Incidência por 100 mil hab.: a cada 100.000 pessoas no estado, quantas foram diagnosticadas com TB. Permite comparar estados de tamanhos diferentes de forma justa.")
+        elif _metric == "mortalidade":
+            st.caption("📌 Mortalidade por 100 mil hab.: a cada 100.000 pessoas no estado, quantas morreram de TB. Estados com valor mais alto precisam de atenção prioritária.")
+        else:
+            st.caption("📌 Total absoluto de casos notificados no estado. Estados mais populosos tendem a ter mais casos — use a aba de incidência para comparar de forma justa.")
         por_uf = casos_uf.sort_values(_col_mapa, ascending=True)
         if not por_uf.empty:
             fig_uf = px.bar(por_uf, x=_col_mapa, y="uf_sigla", orientation="h",
@@ -617,6 +623,7 @@ with tab2:
     c1, c2 = st.columns(2)
     with c1:
         st.subheader("Por Sexo")
+        st.caption("Distribuição dos casos entre homens e mulheres. Historicamente, a TB afeta mais homens no Brasil.")
         if "sexo" in df.columns:
             d = df["sexo"].value_counts().reset_index()
             d.columns = ["Sexo", "Casos"]
@@ -626,6 +633,7 @@ with tab2:
             grafico_vazio()
     with c2:
         st.subheader("Forma Clínica")
+        st.caption("**Pulmonar**: TB nos pulmões — transmissível pelo ar. **Extrapulmonar**: TB em outros órgãos (gânglios, ossos, rins). A forma pulmonar representa maior risco de contágio.")
         if "forma" in df.columns:
             d = df["forma"].value_counts().reset_index()
             d.columns = ["Forma", "Casos"]
@@ -637,6 +645,7 @@ with tab2:
     _, c3mid, _ = st.columns([1, 2, 1])
     with c3mid:
         st.subheader("Tipo de Entrada")
+        st.caption("**Caso Novo**: paciente diagnosticado com TB pela primeira vez. **Recidiva**: paciente que já teve TB e foi curado, mas voltou a adoecer. **Reingresso após abandono**: paciente que interrompeu o tratamento e retornou.")
         if "tipo_entrada" in df.columns:
             d = df["tipo_entrada"].value_counts().reset_index()
             d.columns = ["Tipo", "Casos"]
@@ -649,6 +658,7 @@ with tab2:
     c4, c5 = st.columns(2)
     with c4:
         st.subheader("Por Raça/Cor")
+        st.caption("A TB afeta desproporcionalmente populações negras e indígenas no Brasil, refletindo desigualdades socioeconômicas no acesso à saúde.")
         if "raca_cor" in df.columns:
             d = df["raca_cor"].value_counts().reset_index()
             d.columns = ["Raça", "Casos"]
@@ -658,6 +668,7 @@ with tab2:
             grafico_vazio()
     with c5:
         st.subheader("Situação de Encerramento")
+        st.caption("Como o caso foi concluído: **Cura** (tratamento completo), **Abandono** (interrompeu o tratamento), **Óbito por TB** (faleceu pela doença). Alta taxa de cura indica programa de controle eficaz.")
         col_enc = "situacao_enc_norm" if "situacao_enc_norm" in df.columns else "situacao_encerramento"
         if col_enc in df.columns:
             d = df[col_enc].value_counts().reset_index()
@@ -692,6 +703,7 @@ with tab3:
     c1, c2 = st.columns(2)
     with c1:
         st.subheader("Status HIV")
+        st.caption("Resultado do teste de HIV entre os pacientes com TB. Pacientes com HIV têm imunidade reduzida, tornando a TB mais grave e difícil de tratar.")
         if "status_hiv" in df.columns:
             d = df["status_hiv"].value_counts().reset_index()
             d.columns = ["HIV", "Casos"]
@@ -701,6 +713,7 @@ with tab3:
             grafico_vazio()
     with c2:
         st.subheader("Baciloscopia — 1ª amostra")
+        st.caption("Exame de escarro que detecta a bactéria da TB. **Positivo**: bactéria encontrada (caso confirmado e transmissível). **Negativo**: bactéria não detectada nesta amostra.")
         if "baciloscopia_primeira_amostra" in df.columns:
             d = df["baciloscopia_primeira_amostra"].value_counts().reset_index()
             d.columns = ["Resultado", "Casos"]
@@ -712,6 +725,7 @@ with tab3:
     _, c3mid2, _ = st.columns([1, 2, 1])
     with c3mid2:
         st.subheader("Teste Molecular Rápido (TMR-TB)")
+        st.caption("Exame moderno que detecta a TB e já identifica resistência ao principal antibiótico (rifampicina) em poucas horas. Mais preciso e rápido que a baciloscopia tradicional.")
         if "teste_molecular" in df.columns:
             d = df["teste_molecular"].value_counts().reset_index()
             d.columns = ["Resultado", "Casos"]
@@ -724,13 +738,12 @@ with tab3:
 
     # Raquel ponto 6: Desfecho por status HIV
     st.subheader("Desfecho do Tratamento por Status HIV")
-    st.caption("Distribuição percentual dos desfechos dentro de cada grupo de status HIV. "
-               "Pacientes HIV+ tendem a apresentar mais óbitos e abandonos.")
+    st.caption("Compara como o tratamento de TB termina dependendo do status HIV do paciente. Cada coluna soma 100% — ou seja, mostra a proporção de cada desfecho **dentro** de cada grupo. Pacientes com HIV positivo tendem a ter menor taxa de cura e maior risco de óbito.")
     graficos.fig_desfecho_por_hiv(df)
 
     st.divider()
     st.subheader("Coinfecção TB-HIV por Estado")
-    st.caption("Percentual de casos com HIV positivo sobre o total de casos notificados no estado")
+    st.caption("De cada 100 pacientes com TB no estado, quantos também têm HIV. **Atenção**: este gráfico mostra proporção (%), não quantidade absoluta — estados menores podem ter % mais alta mesmo com menos casos no total.")
     graficos.fig_coinfeccao_hiv_uf(df)
 
 # ── ABA 4: COMORBIDADES ───────────────────────────────────────────────────────
@@ -738,10 +751,11 @@ with tab4:
     col_comor, col_vuln = st.columns([3, 2])
     with col_comor:
         st.subheader("Comorbidades Associadas")
-        st.caption("Percentual dos casos notificados com cada comorbidade registrada")
+        st.caption("Doenças ou condições presentes junto com a TB. Alta prevalência de comorbidades indica pacientes mais vulneráveis e com tratamento mais complexo. Ex: diabéticos têm risco 3x maior de desenvolver TB.")
         graficos.fig_comorbidades(df, total)
     with col_vuln:
         st.subheader("Populações Vulneráveis")
+        st.caption("Grupos com risco muito elevado de TB por condições de vida. Pessoas em situação de rua têm risco até 56x maior; privados de liberdade, até 28x maior que a população geral.")
         st.markdown("<br>", unsafe_allow_html=True)
         vuln = {
             "Privado de Liberdade":  (df.get("populacao_privada_liberdade", pd.Series(dtype=str)).astype(str).str.lower() == "sim").sum(),
@@ -754,7 +768,8 @@ with tab4:
             st.markdown("<div style='margin-bottom:6px'></div>", unsafe_allow_html=True)
 
     st.divider()
-    st.subheader("Comorbidades por Estado *(% sobre total de casos no estado)*")
+    st.subheader("Comorbidades por Estado")
+    st.caption("Proporção de casos com cada comorbidade em cada estado (% sobre o total de casos do estado). Permite identificar quais regiões concentram mais pacientes com condições agravantes.")
     graficos.fig_comorbidades_uf(df)
 
 # ── ABA 5: TENDÊNCIA ─────────────────────────────────────────────────────────
@@ -805,27 +820,25 @@ with tab5:
         st.divider()
 
         # Raquel ponto 3: título explícito com unidade
-        st.subheader(f"Número médio de casos notificados por mês — {ano_sel} vs Média {ANO_INICIO}–{ano_sel-1}")
-        st.caption(f"Barras = notificações mensais de {ano_sel} (filtradas). "
-                   f"Linha pontilhada = média mensal histórica {ANO_INICIO}–{ano_sel-1} (base total).")
+        st.subheader(f"Casos por Mês — {ano_sel} vs Média Histórica")
+        st.caption(f"Barras laranja = casos notificados mês a mês em {ano_sel} (com os filtros aplicados). Linha pontilhada = média mensal esperada com base nos anos {ANO_INICIO}–{ano_sel-1}. Barras acima da linha indicam meses com mais casos que o habitual.")
         graficos.fig_tendencia_mensal(df, df_hist, ano_sel, ANOS_HIST)
 
         st.divider()
         st.subheader(f"Evolução Anual do Total de Casos — {ANO_INICIO}–{ANO_ATUAL}")
-        st.caption("Total de notificações de TB por ano. Barra vermelha = ano selecionado.")
+        st.caption(f"Total de casos de TB notificados por ano no Brasil. A barra vermelha destaca o ano selecionado ({ano_sel}). Tendência de queda é positiva; tendência de alta exige investigação.")
         graficos.fig_tendencia_anual(df_hist, ano_sel)
 
         st.divider()
-        st.subheader(f"Variação por Estado — {ano_sel} vs Média {ANO_INICIO}–{ano_sel-1}")
-        st.caption("Variação percentual em relação à média histórica. "
-                   "Vermelho = Para Mais | Verde = Para Menos | Amarelo = Estável (±5%).")
+        st.subheader(f"Variação por Estado — {ano_sel} vs Média Histórica")
+        st.caption(f"Quanto cada estado variou em relação à sua própria média de casos ({ANO_INICIO}–{ano_sel-1}). 🔴 Vermelho = mais casos que o habitual (preocupante). 🟢 Verde = menos casos (melhora). 🟡 Amarelo = estável (±5%). Variações grandes podem indicar surtos ou melhorias no registro.")
         graficos.fig_tendencia_uf(df, df_hist, ano_sel, ANOS_HIST)
 
         # Raquel ponto 4: indicadores históricos com multiselect
         if HIST_INDICADORES.exists():
             st.divider()
             st.subheader(f"Evolução Histórica de Indicadores Clínicos — {ANO_INICIO}–{ANO_ATUAL}")
-            st.caption("Selecione os indicadores para comparar a evolução ao longo dos anos.")
+            st.caption("Acompanhe como os principais indicadores de TB evoluíram ao longo dos anos. Selecione os indicadores de interesse abaixo. A linha vertical marca o ano selecionado na sidebar.")
             try:
                 df_ind = pd.read_csv(str(HIST_INDICADORES))
                 opcoes_multisel = [
@@ -853,7 +866,7 @@ with tab5:
 # ── ABA 6: ANÁLISE LIVRE ──────────────────────────────────────────────────────────────────────────────
 with tab6:
     st.subheader("Análise Livre")
-    st.caption("Monte seus próprios gráficos arrastando e soltando os campos.")
+    st.caption("Explore os dados do jeito que quiser: arraste os campos para os eixos, filtre, agrupe e crie seus próprios gráficos. Ideal para investigar hipóteses específicas sem precisar de código.")
     df_analise = selecionar_colunas(df, COLUNAS_ANALISE)
     st.info(
         f"**{len(df_analise):,}** registros  |  "
