@@ -277,24 +277,39 @@ with st.sidebar:
     st.markdown("## 🫁 TB · SINAN")
 
     anos = anos_disponiveis()
-    ano_sel = st.selectbox("📅 Ano de notificação", options=anos, index=0)
+    anos_sel = st.multiselect(
+        "📅 Ano de notificação",
+        options=anos,
+        default=[anos[0]],
+        help="Selecione um ou mais anos para comparar períodos.",
+    )
+    if not anos_sel:
+        anos_sel = [anos[0]]
 
-    df_completo = carregar_dados(ano_sel)
+    anos_key = tuple(sorted(anos_sel))
+    df_completo = carregar_dados(anos_key)
     if df_completo.empty:
+        anos_str = ", ".join(str(a) for a in anos_sel)
         st.error(
-            f"Dados de {ano_sel} não encontrados.\n\n"
-            f"Execute:\n```\npython scripts/conectar_banco.py {ano_sel}\n"
-            f"python scripts/preparar_dados.py {ano_sel}\n```"
+            f"Dados de {anos_str} não encontrados.\n\n"
+            f"Execute:\n```\npython scripts/preparar_dados.py\n```"
         )
         st.stop()
-    st.divider()
+
+    # Referência para cálculos que precisam de um único ano (comparação histórica)
+    ano_sel = max(anos_sel)
 
     with st.expander("📍 Localização", expanded=True):
         ufs_disp = sorted(df_completo["estado_notificacao"].dropna().unique())
-        todos_uf = st.checkbox("Todos os estados", value=True, key="todos_uf")
-        uf_sel   = ufs_disp if todos_uf else st.multiselect(
-            "Estados", ufs_disp, default=ufs_disp, label_visibility="collapsed"
+        uf_sel = st.multiselect(
+            "Estados",
+            options=ufs_disp,
+            default=ufs_disp,
+            label_visibility="collapsed",
+            help="Todos os estados selecionados por padrão. Remova os que não deseja.",
         )
+        if not uf_sel:
+            uf_sel = ufs_disp
 
     with st.expander("👤 Perfil do Paciente", expanded=True):
         col1, col2 = st.columns(2)
@@ -425,7 +440,7 @@ st.markdown(f"""
     temporais ({ANO_INICIO}–{ANO_ATUAL}).
   </p>
   <div class="hero-badges">
-    <span class="hero-badge accent"><span class="dot"></span>Ano {ano_sel}</span>
+    <span class="hero-badge accent"><span class="dot"></span>{f"Anos {min(anos_sel)}–{max(anos_sel)}" if len(anos_sel) > 1 else f"Ano {anos_sel[0]}"}</span>
     <span class="hero-badge"><span class="dot"></span>SINAN NET · Dicionário v5.0</span>
     <span class="hero-badge success"><span class="dot"></span>{total_filt:,} registros ({pct_filt}% da base)</span>
     <span class="hero-badge"><span class="dot"></span>Série histórica: {ANO_INICIO}–{ANO_ATUAL}</span>
