@@ -1,0 +1,42 @@
+# docker-compose.yml
+# Uso na VM:
+#   docker compose up -d           # sobe em background
+#   docker compose logs -f         # acompanha logs
+#   docker compose down            # para e remove container
+#
+# Para rebuild após atualização do código:
+#   docker compose up -d --build
+
+services:
+  dashboard:
+    build: .
+    image: dashboard-tb-sinan:latest
+    container_name: dashboard-tb
+    restart: unless-stopped
+    ports:
+      - "8501:8501"
+    environment:
+      - PYTHONUNBUFFERED=1
+    # Volume opcional: monta dados_dashboard externos sem rebuildar a imagem
+    # volumes:
+    #   - ./dados_dashboard:/app/dados_dashboard:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+# nginx como reverse proxy (descomente e configure conforme necessário)
+#  nginx:
+#    image: nginx:alpine
+#    container_name: nginx-tb
+#    restart: unless-stopped
+#    ports:
+#      - "80:80"
+#      - "443:443"
+#    volumes:
+#      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+#      - /etc/letsencrypt:/etc/letsencrypt:ro
+#    depends_on:
+#      - dashboard

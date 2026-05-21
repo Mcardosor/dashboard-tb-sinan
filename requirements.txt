@@ -1,12 +1,11 @@
+# Dashboard Streamlit — dependências de produção (imagem Docker)
 streamlit>=1.45,<2.0
 pandas>=2.2,<3.0
-pygwalker>=0.5
 pyarrow>=14.0
 duckdb>=0.10
-sqlalchemy>=2.0
-psycopg2-binary>=2.9
 plotly>=5.20
-python-dotenv>=1.0
-requests>=2.31
 folium>=0.19
-streamlit-folium>=0.25
+streamlit-folium>=0.2
+pygwalker>=0.5
+requests>=2.31
+python-dotenv>=1.0

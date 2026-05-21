@@ -1,7 +1,6 @@
-# Dados brutos e processados (nunca versionar)
+# Dados brutos e processados (nunca versionar — ficam só na máquina local/VM)
 dados_dashboard/*.parquet
 dados_dashboard/*.csv
-dados_dashboard/sinan_tube_*.parquet
 
 # Credenciais
 .env
@@ -17,6 +16,11 @@ build/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Scripts de diagnóstico local (não entram no deploy)
+scripts/baixar_geojson.py
+scripts/checar_banco.py
+scripts/testar_conexao.py
 
 # Sistema
 .DS_Store

@@ -3,10 +3,11 @@ constantes.py
 ─────────────
 Mapeamentos, paletas de cores e configurações globais do dashboard.
 Centraliza aqui tudo que é reutilizado em graficos.py e app.py.
+
+SEM imports de streamlit/pandas — este módulo deve ser importável
+sem efeitos colaterais pesados (reduz startup de ~1.3s para <0.05s).
 """
 
-import streamlit as st
-import pandas as pd
 from pathlib import Path
 
 # ── Caminhos ───────────────────────────────────────────────────────────────────
@@ -15,7 +16,7 @@ PASTA        = PASTA_DADOS          # alias de compatibilidade
 GEOJSON_PATH = PASTA_DADOS / "br_states.geojson"
 SPEC_PATH    = "spec/dashboard_tb.json"
 
-# Histórico pré-agregado (gerado por conectar_banco.py para múltiplos anos)
+# Histórico pré-agregado (gerado por scripts/gerar_historico.py)
 HIST_MENSAL      = PASTA_DADOS / "historico_mensal.csv"
 HIST_ESTADUAL    = PASTA_DADOS / "historico_estadual.csv"
 HIST_ANUAL       = PASTA_DADOS / "historico_anual.csv"
@@ -73,7 +74,7 @@ POP_ESTADO: dict[str, int] = {
     "RR":    652_713,  "RS": 11_466_630,  "SC":  7_786_786,
     "SE":  2_338_474,  "SP": 46_649_132,  "TO":  1_607_363,
 }
-POP_BRASIL: int = sum(POP_ESTADO.values())  # ~203 milhões (Censo 2022)
+POP_BRASIL: int = sum(POP_ESTADO.values())
 
 # ── Agravos associados ─────────────────────────────────────────────────────────
 AGRAVOS = {
@@ -106,7 +107,7 @@ NORMALIZAR_DESFECHO = {
     "Falência":                "Falencia",
 }
 
-# ── Paletas de cores legadas (mantidas para fig_mapa / fig_piramide) ───────────
+# ── Paletas de cores ───────────────────────────────────────────────────────────
 CORES_DESFECHOS = {
     "Cura":                    "#2ea043",
     "Em acompanhamento":       "#388bfd",
@@ -140,7 +141,6 @@ ESCALA_MAPA = [
 
 # ── Paleta TB — semântica epidemiológica ──────────────────────────────────────
 TB_COLORS = {
-    # Desfecho clínico
     "Cura":                     "#2ea043",
     "Óbito por TB":             "#da3633",
     "Obito por TB":             "#da3633",
@@ -158,21 +158,17 @@ TB_COLORS = {
     "Mudança de Esquema":       "#ffa657",
     "Mudança Diagnóstico":      "#f0b342",
     "Em acompanhamento":        "#388bfd",
-    # HIV
     "Positivo":                 "#da3633",
     "Negativo":                 "#3fb950",
     "Em andamento":             "#d29922",
     "Não realizado":            "#a371f7",
     "Nao realizado":            "#a371f7",
-    # Sexo
     "Masculino":                "#58a6ff",
     "Feminino":                 "#f778ba",
-    # Sim/Não
     "Sim":                      "#da3633",
     "Não":                      "#3fb950",
     "Nao":                      "#3fb950",
     "Ignorado":                 "#d29922",
-    # Baciloscopia / TMR
     "Positiva":                 "#da3633",
     "Negativa":                 "#3fb950",
     "Não realizada":            "#a371f7",
@@ -185,18 +181,15 @@ TB_COLORS = {
     "Não detectável":           "#3fb950",
     "Nao detectavel":           "#3fb950",
     "Inconclusivo":             "#d2a8ff",
-    # Raça
     "Branca":                   "#79c0ff",
     "Preta":                    "#a371f7",
     "Parda":                    "#d2a8ff",
     "Amarela":                  "#f0b342",
     "Indígena":                 "#3fb950",
     "Indigena":                 "#3fb950",
-    # Forma clínica
     "Pulmonar":                       "#58a6ff",
     "Extrapulmonar":                  "#a371f7",
     "Pulmonar + Extrapulmonar":       "#d2a8ff",
-    # Tipo de entrada
     "Caso Novo":                "#3fb950",
     "Recidiva":                 "#d29922",
     "Reingresso Abandono":      "#f0883e",
@@ -250,7 +243,7 @@ PLOTLY_TEMPLATE = {
     }
 }
 
-# Mantido para compatibilidade com graficos.py legado
+# Mantido para compatibilidade com graficos.py / mapa_interativo.py
 BG = {
     "paper_bgcolor": "rgba(0,0,0,0)",
     "plot_bgcolor":  "rgba(0,0,0,0)",
@@ -266,7 +259,6 @@ PLOTLY_CFG = {"scrollZoom": False}
 def tb_layout(fig, titulo=None, altura=None):
     """Aplica template TB padronizado em uma figura Plotly."""
     fig.update_layout(**PLOTLY_TEMPLATE["layout"])
-    # Sempre define title_text para evitar que browsers renderizem "undefined"
     fig.update_layout(title_text=titulo if titulo else "")
     if altura:
         fig.update_layout(height=altura)
@@ -278,19 +270,6 @@ H_SMALL  = 300
 H_MEDIUM = 380
 H_LARGE  = 480
 
-# ── População por estado — IBGE Censo 2022 ─────────────────────────────────────
-POP_ESTADO = {
-    "AC":    906_876,   "AL":  3_127_683,  "AM":  4_269_995,
-    "AP":    877_613,   "BA": 14_873_064,  "CE":  9_240_580,
-    "DF":  3_094_325,   "ES":  4_108_508,  "GO":  7_206_589,
-    "MA":  7_114_598,   "MG": 21_292_666,  "MS":  2_839_188,
-    "MT":  3_658_813,   "PA":  8_777_124,  "PB":  4_059_905,
-    "PE":  9_674_793,   "PI":  3_281_480,  "PR": 11_597_484,
-    "RJ": 17_366_189,   "RN":  3_302_406,  "RO":  1_590_011,
-    "RR":    652_713,   "RS": 11_466_630,  "SC":  7_786_786,
-    "SE":  2_338_474,   "SP": 46_649_132,  "TO":  1_607_363,
-}
-POP_BRASIL = sum(POP_ESTADO.values())
 
 # ── Colunas expostas na Análise Livre ─────────────────────────────────────────
 COLUNAS_ANALISE = (
@@ -313,17 +292,15 @@ COLUNAS_ANALISE = (
     "numero_contatos", "numero_contatos_examinados",
 )
 
-# ── Helpers ────────────────────────────────────────────────────────────────────
+
+# ── Helpers puros (sem dependência de streamlit) ───────────────────────────────
 def pct(valor, total):
+    """Retorna percentual formatado (ex: '12.3%') ou '—' se total=0."""
     return f"{valor/total*100:.1f}%" if total and total > 0 else "—"
 
 
-def grafico_vazio():
-    st.info("Nenhum dado disponível para os filtros selecionados.")
-
-
-# ── KPI Card builder ───────────────────────────────────────────────────────────
 def _delta_badge(cur, prev, good_when_up=False):
+    """Gera HTML do badge de variação para KPI cards."""
     try:
         cur, prev = float(cur), float(prev)
         if prev == 0:
@@ -339,18 +316,25 @@ def _delta_badge(cur, prev, good_when_up=False):
 
 
 def kpi_card_html(title, value, delta_html, icon, accent, selected):
+    """Monta o HTML de um KPI card."""
     sel   = "kpi-selected" if selected else ""
     delta = delta_html.strip() if delta_html else ""
     return (
-        f'<div class="kpi-card {sel}" style="--accent:{accent};">' 
-        f'<div class="kpi-inner">' 
-        f'<div class="kpi-bar"></div>' 
-        f'<div class="kpi-body">' 
-        f'<div class="kpi-label">{title}</div>' 
-        f'<div class="kpi-value">{value}</div>' 
-        f'{delta}' 
-        f'</div>' 
-        f'<div class="kpi-icon">{icon}</div>' 
-        f'</div>' 
+        f'<div class="kpi-card {sel}" style="--accent:{accent};">'
+        f'<div class="kpi-inner">'
+        f'<div class="kpi-bar"></div>'
+        f'<div class="kpi-body">'
+        f'<div class="kpi-label">{title}</div>'
+        f'<div class="kpi-value">{value}</div>'
+        f'{delta}'
+        f'</div>'
+        f'<div class="kpi-icon">{icon}</div>'
+        f'</div>'
         f'</div>'
     )
+
+
+def grafico_vazio():
+    """Exibe mensagem padrão quando não há dados para os filtros selecionados."""
+    import streamlit as st  # lazy import — só pago quando chamado
+    st.info("Nenhum dado disponível para os filtros selecionados.")
