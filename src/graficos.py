@@ -430,6 +430,16 @@ def fig_tendencia_mensal(df_filtrado: pd.DataFrame, df_hist: dict,
                .groupby("mes_num").size().reset_index(name=f"casos_{ano_sel}"))
     mes_max = int(mes_ano["mes_num"].max()) if not mes_ano.empty else 12
 
+    # Um mês só é realmente "incompleto" se for o mês atual do ano atual.
+    # Para anos passados, todos os meses têm dados completos.
+    import datetime as _dt
+    _hoje = _dt.datetime.now()
+    mes_incompleto_num = (
+        mes_max
+        if (ano_sel == _hoje.year and mes_max == _hoje.month)
+        else None
+    )
+
     df_mensal   = df_hist["mensal"]
     hist_anos   = df_mensal[df_mensal["nu_ano"].astype(str).isin([str(a) for a in anos_hist])]
     media_hist  = (hist_anos.groupby("mes_num")["casos"].sum().reset_index(name="total"))
@@ -447,7 +457,7 @@ def fig_tendencia_mensal(df_filtrado: pd.DataFrame, df_hist: dict,
     COR_MAIS = "#da3633"; COR_MENOS = "#3fb950"; COR_ESTAVEL = "#d29922"
     COR_INC  = "#6e7681"; COR_HIST  = "#58a6ff"
     cores_barras = [
-        COR_INC if int(r["mes_num"]) == mes_max else
+        COR_INC if (mes_incompleto_num and int(r["mes_num"]) == mes_incompleto_num) else
         COR_MAIS if r["direcao"] == "Para Mais" else
         COR_MENOS if r["direcao"] == "Para Menos" else COR_ESTAVEL
         for _, r in tabela.iterrows()
@@ -467,13 +477,14 @@ def fig_tendencia_mensal(df_filtrado: pd.DataFrame, df_hist: dict,
         marker=dict(size=7, color=COR_HIST, line=dict(color="#0d1117", width=1)),
         hovertemplate="<b>%{x} — Média histórica</b><br>%{y:,.0f} casos<extra></extra>",
     ))
-    mes_inc = tabela[tabela["mes_num"] == mes_max]
-    if not mes_inc.empty:
-        fig.add_annotation(
-            x=mes_inc.iloc[0]["mes_label"], y=mes_inc.iloc[0][f"casos_{ano_sel}"],
-            text="mês incompleto", showarrow=True, arrowhead=2,
-            font=dict(color="#8b949e", size=10), arrowcolor="#8b949e", ay=-30,
-        )
+    if mes_incompleto_num is not None:
+        mes_inc = tabela[tabela["mes_num"] == mes_incompleto_num]
+        if not mes_inc.empty:
+            fig.add_annotation(
+                x=mes_inc.iloc[0]["mes_label"], y=mes_inc.iloc[0][f"casos_{ano_sel}"],
+                text="mês incompleto", showarrow=True, arrowhead=2,
+                font=dict(color="#8b949e", size=10), arrowcolor="#8b949e", ay=-30,
+            )
     tb_layout(fig, altura=H_LARGE)
     fig.update_layout(
         xaxis=dict(title=""), yaxis=dict(title="Nº de casos"),
