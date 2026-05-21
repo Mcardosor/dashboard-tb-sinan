@@ -18,13 +18,19 @@ from src.constantes import (
 )
 
 
-@st.cache_resource(show_spinner="Carregando dados...")
-def carregar_dados(path: str) -> pd.DataFrame:
+@st.cache_data(show_spinner="Carregando dados...")
+def carregar_dados(ano: int) -> pd.DataFrame:
     """
-    Lê o Parquet tratado e mantém um único objeto em memória.
-    cache_resource evita a cópia que cache_data faria a cada interação.
+    Carrega os dados de um ano via DuckDB.
+    - Leitura colunar: so traz as colunas necessarias do Parquet
+    - Filtro pushdown: nao carrega outros anos na RAM
+    - cache_data: resultado cacheado por ano (serializa o DataFrame)
     """
-    return pd.read_parquet(path)
+    from src.banco import query
+    return query(
+        "SELECT * FROM sinan WHERE CAST(ano_notificacao AS VARCHAR) = ?",
+        [str(ano)],
+    )
 
 
 @st.cache_resource(show_spinner=False)

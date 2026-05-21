@@ -23,7 +23,7 @@ except ImportError:
 from src.constantes import (
     SPEC_PATH, COLUNAS_ANALISE, PLOTLY_CFG, POP_ESTADO, POP_BRASIL,
     UF_SIGLAS, TB_SEQ_INCIDENCIA, TB_SEQ_MORTAL,
-    anos_disponiveis, parquet_path,
+    anos_disponiveis,
     ANO_ATUAL, ANO_INICIO, HIST_INDICADORES,
     NORMALIZAR_DESFECHO, AGRAVOS, POPULACOES,
     H_SMALL, H_MEDIUM, H_LARGE,
@@ -278,16 +278,15 @@ with st.sidebar:
 
     anos = anos_disponiveis()
     ano_sel = st.selectbox("📅 Ano de notificação", options=anos, index=0)
-    path_sel = parquet_path(ano_sel)
-    if not path_sel.exists():
+
+    df_completo = carregar_dados(ano_sel)
+    if df_completo.empty:
         st.error(
             f"Dados de {ano_sel} não encontrados.\n\n"
             f"Execute:\n```\npython scripts/conectar_banco.py {ano_sel}\n"
             f"python scripts/preparar_dados.py {ano_sel}\n```"
         )
         st.stop()
-
-    df_completo = carregar_dados(str(path_sel))
     st.divider()
 
     with st.expander("📍 Localização", expanded=True):
