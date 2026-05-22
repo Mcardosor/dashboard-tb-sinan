@@ -35,7 +35,7 @@ from src import mapa_interativo
 # ══════════════════════════════════════════════════════════════════════════════
 st.set_page_config(
     page_title="Dashboard TB | SINAN",
-    page_icon="🫁",
+    page_icon="🩺",
     layout="wide",
 )
 
@@ -266,7 +266,7 @@ st.markdown("""
 #  SIDEBAR — FILTROS
 # ══════════════════════════════════════════════════════════════════════════════
 with st.sidebar:
-    st.markdown("## 🫁 TB · SINAN")
+    st.markdown("## 🩺 TB · SINAN")
 
     anos = anos_disponiveis()
     MAX_ANOS = 3
@@ -449,7 +449,7 @@ if total_filt == 0:
 st.markdown(f"""
 <div class="hero">
   <h1 class="hero-title">
-    <span class="hero-emoji">🫁</span>
+    <span class="hero-emoji">🩺</span>
     <span>Tuberculose no Brasil</span>
   </h1>
   <p class="hero-subtitle">
