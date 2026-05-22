@@ -1,9 +1,10 @@
 """
 dados.py
-────────
-Funções de carregamento e cache dos dados do dashboard.
+--------
+Funcoes de carregamento e cache dos dados do dashboard.
 """
 
+import copy
 import json
 import requests
 import streamlit as st
@@ -21,13 +22,12 @@ from src.constantes import (
 @st.cache_data(show_spinner="Carregando dados...")
 def carregar_dados(anos: tuple) -> pd.DataFrame:
     """
-    Carrega os dados de um ou mais anos via DuckDB (máx. 3 anos).
-    - anos: tupla ordenada de inteiros, ex: (2022,) ou (2022, 2023, 2024)
-    - Leitura colunar: só as colunas usadas pelo dashboard (COLUNAS_DASHBOARD)
-    - cache_data: resultado cacheado pela combinação de anos
+    Carrega os dados de um ou mais anos via DuckDB (max. 3 anos).
+    anos: tupla ordenada de inteiros, ex: (2022,) ou (2022, 2023, 2024)
+    Leitura colunar: so as colunas usadas pelo dashboard (COLUNAS_DASHBOARD)
+    cache_data: resultado cacheado pela combinacao de anos
     """
     from src.banco import query
-    # Literais em vez de params — mais seguro com IN e múltiplos valores
     anos_literais = ", ".join(f"'{a}'" for a in anos)
     return query(
         f"SELECT * FROM sinan WHERE CAST(ano_notificacao AS VARCHAR) IN ({anos_literais})"
@@ -36,18 +36,39 @@ def carregar_dados(anos: tuple) -> pd.DataFrame:
 
 @st.cache_resource(show_spinner=False)
 def carregar_geojson() -> dict:
-    """Carrega o GeoJSON dos estados brasileiros (leitura única)."""
+    """Carrega o GeoJSON dos estados brasileiros (leitura unica)."""
     if not GEOJSON_PATH.exists():
         raise FileNotFoundError(f"GeoJSON nao encontrado em {GEOJSON_PATH}")
     with open(GEOJSON_PATH, encoding="utf-8") as f:
         return json.load(f)
 
 
+@st.cache_data(show_spinner=False)
+def geojson_enriquecido(casos_uf: pd.DataFrame) -> dict:
+    """
+    Retorna uma copia do GeoJSON com casos/incidencia/mortalidade injetados.
+    Cacheado por casos_uf: so refaz o deepcopy quando os dados mudam.
+    Evita deepcopy a cada rerun do Streamlit (operacao O(n) no GeoJSON inteiro).
+    """
+    geojson = carregar_geojson()
+    gj = copy.deepcopy(geojson)
+    for feat in gj["features"]:
+        sigla = feat["properties"].get("sigla", "")
+        row = casos_uf[casos_uf["uf_sigla"] == sigla]
+        if not row.empty:
+            r = row.iloc[0]
+            feat["properties"]["casos"]       = int(r["casos"])
+            feat["properties"]["incidencia"]  = float(r["incidencia"])
+            feat["properties"]["mortalidade"] = float(r["mortalidade"])
+        else:
+            feat["properties"]["casos"]       = 0
+            feat["properties"]["incidencia"]  = 0.0
+            feat["properties"]["mortalidade"] = 0.0
+    return gj
+
+
 def selecionar_colunas(df: pd.DataFrame, colunas: tuple) -> pd.DataFrame:
-    """
-    Filtra apenas as colunas existentes no DataFrame.
-    Sem cache: hashing de DataFrame é O(n*m) e mais caro que a operação.
-    """
+    """Filtra apenas as colunas existentes no DataFrame."""
     return df[[c for c in colunas if c in df.columns]]
 
 
@@ -59,24 +80,22 @@ def render_pygwalker(df: pd.DataFrame, spec_path: str | None = None) -> None:
         renderer = StreamlitRenderer(df, **kwargs)
         renderer.explorer()
     except ImportError:
-        # fallback para versões antigas
         try:
             import pygwalker as pyg
             import streamlit.components.v1 as components
             html = pyg.to_html(df, appearance="dark")
             components.html(html, height=1000, scrolling=True)
         except Exception as e:
-            st.error(f"PyGWalker indisponível: {e}")
+            st.error(f"PyGWalker indisponivel: {e}")
 
 
 def enriquecer_df(df: pd.DataFrame) -> pd.DataFrame:
     """
     Adiciona colunas derivadas ao DataFrame para uso nos dashboards.
-    Não usa cache pois recebe df já filtrado.
+    Nao usa cache pois recebe df ja filtrado.
     """
     df = df.copy()
 
-    # uf_sigla: mapa de nome do estado → sigla
     if "estado_notificacao" in df.columns:
         df["uf_sigla"] = (
             df["estado_notificacao"].astype(str)
@@ -84,14 +103,12 @@ def enriquecer_df(df: pd.DataFrame) -> pd.DataFrame:
             .fillna("?")
         )
 
-    # situacao_enc_norm: desfechos normalizados (sem acentos)
     if "situacao_encerramento" in df.columns:
         df["situacao_enc_norm"] = (
             df["situacao_encerramento"].astype(str)
             .map(lambda x: NORMALIZAR_DESFECHO.get(x, x))
         )
 
-    # mes_num / data de notificação
     if "data_notificacao" in df.columns:
         try:
             dts = pd.to_datetime(df["data_notificacao"], errors="coerce")
@@ -102,9 +119,9 @@ def enriquecer_df(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-@st.cache_data(show_spinner="Carregando histórico...")
+@st.cache_data(show_spinner="Carregando historico...")
 def load_historico() -> dict | None:
-    """Carrega os CSVs pré-agregados de histórico. Retorna dict ou None."""
+    """Carrega os CSVs pre-agregados de historico. Retorna dict ou None."""
     paths = {
         "mensal":   HIST_MENSAL,
         "estadual": HIST_ESTADUAL,
@@ -118,9 +135,9 @@ def load_historico() -> dict | None:
         return None
 
 
-@st.cache_resource(show_spinner="Carregando coordenadas dos municípios...")
+@st.cache_resource(show_spinner="Carregando coordenadas dos municipios...")
 def load_municipios() -> pd.DataFrame:
-    """Carrega coordenadas dos municípios (local ou download)."""
+    """Carrega coordenadas dos municipios (local ou download)."""
     if MUN_PARQUET.exists():
         return pd.read_parquet(str(MUN_PARQUET))
     try:

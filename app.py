@@ -5,20 +5,12 @@ Dashboard completo: dark theme, hero, 8 KPI cards, 6 abas, Folium.
 Revisão Raquel: 100 mil, reorder KPIs, pirâmide óbitos, desfecho HIV, indicadores.
 """
 
-import copy
 import streamlit as st
 import streamlit.components.v1 as components
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from pathlib import Path
-
-try:
-    import folium
-    from streamlit_folium import st_folium
-    FOLIUM_OK = True
-except ImportError:
-    FOLIUM_OK = False
 
 from src.constantes import (
     SPEC_PATH, COLUNAS_ANALISE, PLOTLY_CFG, POP_ESTADO, POP_BRASIL,
@@ -31,7 +23,7 @@ from src.constantes import (
     tb_layout, tb_color_map,
 )
 from src.dados import (
-    carregar_dados, carregar_geojson,
+    carregar_dados, carregar_geojson, geojson_enriquecido,
     selecionar_colunas, render_pygwalker,
     enriquecer_df, load_historico,
 )
@@ -556,22 +548,18 @@ with tab1:
 
     with col_mapa:
         st.subheader(_titulo_mapa)
-        if FOLIUM_OK:
+        # Lazy import: folium só carrega quando o mapa é renderizado (~2s economizados em cada rerun)
+        try:
+            import folium
+            from streamlit_folium import st_folium
+            _folium_ok = True
+        except ImportError:
+            _folium_ok = False
+
+        if _folium_ok:
             try:
-                geojson = carregar_geojson()
-                gj = copy.deepcopy(geojson)
-                for feat in gj["features"]:
-                    sigla = feat["properties"].get("sigla", "")
-                    row = casos_uf[casos_uf["uf_sigla"] == sigla]
-                    if not row.empty:
-                        r = row.iloc[0]
-                        feat["properties"]["casos"]       = int(r["casos"])
-                        feat["properties"]["incidencia"]  = float(r["incidencia"])
-                        feat["properties"]["mortalidade"] = float(r["mortalidade"])
-                    else:
-                        feat["properties"]["casos"] = 0
-                        feat["properties"]["incidencia"] = 0.0
-                        feat["properties"]["mortalidade"] = 0.0
+                # GeoJSON enriquecido com cache: deepcopy só refaz quando casos_uf muda
+                gj = geojson_enriquecido(casos_uf)
                 m = folium.Map(location=[-14, -52], zoom_start=4,
                                tiles="CartoDB dark_matter", prefer_canvas=True)
                 folium.Choropleth(
