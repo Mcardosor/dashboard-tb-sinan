@@ -25,3 +25,6 @@ scripts/testar_conexao.py
 # Sistema
 .DS_Store
 Thumbs.db
+
+# Documentação interna (não sobe no git)
+docs/
