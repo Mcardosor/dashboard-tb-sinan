@@ -46,6 +46,15 @@ def anos_disponiveis() -> list[int]:
     return anos if anos else [2025]
 
 
+# -- Regioes do Brasil -> siglas dos estados ------------------------------------
+REGIOES: dict[str, list[str]] = {
+    "Norte":        ["AC", "AM", "AP", "PA", "RO", "RR", "TO"],
+    "Nordeste":     ["AL", "BA", "CE", "MA", "PB", "PE", "PI", "RN", "SE"],
+    "Centro-Oeste": ["DF", "GO", "MS", "MT"],
+    "Sudeste":      ["ES", "MG", "RJ", "SP"],
+    "Sul":          ["PR", "RS", "SC"],
+}
+
 # ── Mapeamento de estados → siglas ─────────────────────────────────────────────
 UF_SIGLAS = {
     "Acre": "AC", "Alagoas": "AL", "Amapa": "AP", "Amazonas": "AM",

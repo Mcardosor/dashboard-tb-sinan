@@ -20,7 +20,7 @@ from src.constantes import (
     NORMALIZAR_DESFECHO, AGRAVOS, POPULACOES,
     H_SMALL, H_MEDIUM, H_LARGE,
     grafico_vazio, kpi_card_html, _delta_badge, pct,
-    tb_layout, tb_color_map,
+    tb_layout, tb_color_map, REGIOES,
 )
 from src.dados import (
     carregar_dados, carregar_geojson, geojson_enriquecido,
@@ -297,12 +297,40 @@ with st.sidebar:
 
     with st.expander("📍 Localização", expanded=True):
         ufs_disp = sorted(df_completo["estado_notificacao"].dropna().unique())
+
+        # Atalhos por regiao — clica para pre-selecionar os estados
+        st.caption("Seleção rápida por região")
+        _regiao_sel = st.session_state.get("_regiao_sel", "Todas")
+        _opcoes = ["Todas"] + list(REGIOES.keys())
+        _cols = st.columns(len(_opcoes))
+        for _i, _reg in enumerate(_opcoes):
+            with _cols[_i]:
+                if st.button(
+                    _reg,
+                    key=f"btn_reg_{_reg}",
+                    use_container_width=True,
+                    type="primary" if _regiao_sel == _reg else "secondary",
+                ):
+                    st.session_state["_regiao_sel"] = _reg
+                    st.rerun()
+        _regiao_sel = st.session_state.get("_regiao_sel", "Todas")
+
+        # Default do multiselect baseado na regiao escolhida
+        if _regiao_sel == "Todas":
+            _default_ufs = ufs_disp
+        else:
+            _siglas_regiao = set(REGIOES[_regiao_sel])
+            _default_ufs = sorted([n for n in ufs_disp if UF_SIGLAS.get(n) in _siglas_regiao])
+            if not _default_ufs:
+                _default_ufs = ufs_disp
+
         uf_sel = st.multiselect(
             "Estados",
             options=ufs_disp,
-            default=ufs_disp,
+            default=_default_ufs,
             label_visibility="collapsed",
-            help="Todos os estados selecionados por padrão. Remova os que não deseja.",
+            help="Use os botões acima para seleção rápida, ou ajuste manualmente.",
+            key=f"uf_sel_{_regiao_sel}",
         )
         if not uf_sel:
             uf_sel = ufs_disp
