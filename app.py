@@ -298,24 +298,18 @@ with st.sidebar:
     with st.expander("📍 Localização", expanded=True):
         ufs_disp = sorted(df_completo["estado_notificacao"].dropna().unique())
 
-        # Atalhos por regiao — clica para pre-selecionar os estados
-        st.caption("Seleção rápida por região")
-        _regiao_sel = st.session_state.get("_regiao_sel", "Todas")
-        _opcoes = ["Todas"] + list(REGIOES.keys())
-        _cols = st.columns(len(_opcoes))
-        for _i, _reg in enumerate(_opcoes):
-            with _cols[_i]:
-                if st.button(
-                    _reg,
-                    key=f"btn_reg_{_reg}",
-                    use_container_width=True,
-                    type="primary" if _regiao_sel == _reg else "secondary",
-                ):
-                    st.session_state["_regiao_sel"] = _reg
-                    st.rerun()
-        _regiao_sel = st.session_state.get("_regiao_sel", "Todas")
+        # Atalho por região via st.pills (Streamlit 1.36+)
+        _regiao_sel = st.pills(
+            "Região",
+            options=["Todas"] + list(REGIOES.keys()),
+            default="Todas",
+            key="regiao_pills",
+            label_visibility="collapsed",
+        )
+        if not _regiao_sel:
+            _regiao_sel = "Todas"
 
-        # Default do multiselect baseado na regiao escolhida
+        # Default do multiselect baseado na região escolhida
         if _regiao_sel == "Todas":
             _default_ufs = ufs_disp
         else:
