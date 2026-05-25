@@ -19,19 +19,44 @@ from src.constantes import (
 )
 
 
-@st.cache_data(show_spinner="Carregando dados...")
+_COLUNAS_CATEGORIA = (
+    "estado_notificacao", "uf_residencia", "municipio_notificacao", "municipio_residencia",
+    "sexo", "raca_cor", "escolaridade",
+    "tipo_entrada", "forma", "extrapulmonar",
+    "situacao_encerramento",
+    "status_hiv", "uso_antirretroviral", "raio_x_torax", "teste_tuberculinico",
+    "baciloscopia_primeira_amostra", "cultura_escarro", "histopatologia",
+    "teste_molecular", "teste_sensibilidade", "tratamento_supervisionado",
+    "baciloscopia_mes_1", "baciloscopia_mes_2", "baciloscopia_mes_3",
+    "baciloscopia_mes_4", "baciloscopia_mes_5", "baciloscopia_mes_6",
+    "baciloscopia_apos_6_meses",
+    "agravo_aids", "agravo_alcoolismo", "agravo_diabetes",
+    "agravo_doenca_mental", "agravo_drogas_ilicitas", "agravo_tabagismo", "agravo_outros",
+    "populacao_privada_liberdade", "populacao_situacao_rua",
+    "profissional_saude", "populacao_imigrante", "beneficiario_governo",
+    "tipo_notificacao",
+)
+
+
+@st.cache_data(show_spinner="Carregando dados...", max_entries=6)
 def carregar_dados(anos: tuple) -> pd.DataFrame:
     """
     Carrega os dados de um ou mais anos via DuckDB (max. 3 anos).
     anos: tupla ordenada de inteiros, ex: (2022,) ou (2022, 2023, 2024)
     Leitura colunar: so as colunas usadas pelo dashboard (COLUNAS_DASHBOARD)
-    cache_data: resultado cacheado pela combinacao de anos
+    cache_data: resultado cacheado pela combinacao de anos (max 6 entradas)
+    Colunas string convertidas para category no cache (~60% menos RAM).
+    O app.py usa .astype(str) ao operar, então não vê dtype category.
     """
     from src.banco import query
     anos_literais = ", ".join(f"'{a}'" for a in anos)
-    return query(
+    df = query(
         f"SELECT * FROM sinan WHERE CAST(ano_notificacao AS VARCHAR) IN ({anos_literais})"
     )
+    for col in _COLUNAS_CATEGORIA:
+        if col in df.columns:
+            df[col] = df[col].astype("category")
+    return df
 
 
 @st.cache_resource(show_spinner=False)
@@ -73,38 +98,39 @@ def selecionar_colunas(df: pd.DataFrame, colunas: tuple) -> pd.DataFrame:
 
 
 def render_pygwalker(df: pd.DataFrame, spec_path: str | None = None) -> None:
-    """Renderiza o PyGWalker diretamente no Streamlit (API 0.4+)."""
+    """
+    Renderiza o PyGWalker via HTML puro — compatível com Docker/servidor.
+    Requer maxMessageSize >= 400 no config.toml do Streamlit.
+    """
     try:
-        from pygwalker.api.streamlit import StreamlitRenderer
-        kwargs: dict = {"appearance": "dark", "spec": spec_path} if (spec_path and Path(spec_path).exists()) else {"appearance": "dark"}
-        renderer = StreamlitRenderer(df, **kwargs)
-        renderer.explorer()
-    except ImportError:
-        try:
-            import pygwalker as pyg
-            import streamlit.components.v1 as components
-            html = pyg.to_html(df, appearance="dark")
-            components.html(html, height=1000, scrolling=True)
-        except Exception as e:
-            st.error(f"PyGWalker indisponivel: {e}")
+        import pygwalker as pyg
+        import streamlit.components.v1 as components
+        kwargs: dict = {"appearance": "dark"}
+        if spec_path and Path(spec_path).exists():
+            kwargs["spec"] = spec_path
+        html = pyg.to_html(df, **kwargs)
+        components.html(html, height=1000, scrolling=True)
+    except Exception as e:
+        st.error(f"PyGWalker indisponível: {e}")
 
 
 def enriquecer_df(df: pd.DataFrame) -> pd.DataFrame:
     """
     Adiciona colunas derivadas ao DataFrame para uso nos dashboards.
     Nao usa cache pois recebe df ja filtrado.
+    Usa assign() para evitar copia completa do DataFrame.
     """
-    df = df.copy()
+    extras: dict = {}
 
     if "estado_notificacao" in df.columns:
-        df["uf_sigla"] = (
+        extras["uf_sigla"] = (
             df["estado_notificacao"].astype(str)
             .map(UF_SIGLAS)
             .fillna("?")
         )
 
     if "situacao_encerramento" in df.columns:
-        df["situacao_enc_norm"] = (
+        extras["situacao_enc_norm"] = (
             df["situacao_encerramento"].astype(str)
             .map(lambda x: NORMALIZAR_DESFECHO.get(x, x))
         )
@@ -112,11 +138,11 @@ def enriquecer_df(df: pd.DataFrame) -> pd.DataFrame:
     if "data_notificacao" in df.columns:
         try:
             dts = pd.to_datetime(df["data_notificacao"], errors="coerce")
-            df["mes_num"] = dts.dt.month
+            extras["mes_num"] = dts.dt.month
         except Exception:
-            df["mes_num"] = None
+            extras["mes_num"] = None
 
-    return df
+    return df.assign(**extras) if extras else df
 
 
 @st.cache_data(show_spinner="Carregando historico...")

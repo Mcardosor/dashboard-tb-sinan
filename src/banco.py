@@ -10,6 +10,7 @@ Otimizações:
   - SELECT com colunas específicas (não SELECT *) — 44% menos dados lidos
   - SET threads para paralelismo máximo na leitura colunar
   - read_parquet() inline como CTE — sem CREATE VIEW separado
+  - Colunas string reconvertidas para category após carga (~60% menos RAM)
 """
 
 from pathlib import Path
@@ -18,6 +19,34 @@ import duckdb
 import pandas as pd
 
 from src.constantes import PASTA_DADOS, COLUNAS_DASHBOARD
+
+# Colunas de baixa cardinalidade que voltam como object do DuckDB — reconverter
+# para category economiza ~60% de memória nessas colunas.
+_COLUNAS_CATEGORIA = (
+    "estado_notificacao", "uf_residencia", "municipio_notificacao", "municipio_residencia",
+    "sexo", "raca_cor", "escolaridade",
+    "tipo_entrada", "forma", "extrapulmonar",
+    "situacao_encerramento",
+    "status_hiv", "uso_antirretroviral", "raio_x_torax", "teste_tuberculinico",
+    "baciloscopia_primeira_amostra", "cultura_escarro", "histopatologia",
+    "teste_molecular", "teste_sensibilidade", "tratamento_supervisionado",
+    "baciloscopia_mes_1", "baciloscopia_mes_2", "baciloscopia_mes_3",
+    "baciloscopia_mes_4", "baciloscopia_mes_5", "baciloscopia_mes_6",
+    "baciloscopia_apos_6_meses",
+    "agravo_aids", "agravo_alcoolismo", "agravo_diabetes",
+    "agravo_doenca_mental", "agravo_drogas_ilicitas", "agravo_tabagismo", "agravo_outros",
+    "populacao_privada_liberdade", "populacao_situacao_rua",
+    "profissional_saude", "populacao_imigrante", "beneficiario_governo",
+    "tipo_notificacao",
+)
+
+
+def _aplicar_categorias(df: pd.DataFrame) -> pd.DataFrame:
+    """Reconverte colunas string para category após carga do DuckDB."""
+    for col in _COLUNAS_CATEGORIA:
+        if col in df.columns and df[col].dtype == object:
+            df[col] = df[col].astype("category")
+    return df
 
 
 def _glob() -> str:

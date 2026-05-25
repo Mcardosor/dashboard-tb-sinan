@@ -30,6 +30,10 @@ from src.dados import (
 from src import graficos
 from src import mapa_interativo
 
+# Valores inválidos a excluir dos gráficos (valores técnicos, não categorias epidemiológicas)
+_INVAL = ["nan", "None", "undefined", ""]
+_NI_NORM = {"Nao informado": "Não informado"}  # normaliza grafia sem acento
+
 # ══════════════════════════════════════════════════════════════════════════════
 #  CONFIG & CSS
 # ══════════════════════════════════════════════════════════════════════════════
@@ -341,14 +345,16 @@ with st.sidebar:
             forma_extra = st.checkbox("Extrapulmonar", value=True, key="fe")
             forma_ambos = st.checkbox("Pulm.+Extra",   value=True, key="fa")
         if "raca_cor" in df_completo.columns:
-            racas    = sorted(df_completo["raca_cor"].dropna().unique())
+            _racas_vals = df_completo["raca_cor"].astype(str).replace("nan", "Não informado").replace(_NI_NORM)
+            racas    = sorted(_racas_vals.unique())
             raca_sel = st.multiselect("Raça/Cor", racas, default=racas)
         else:
             racas = []; raca_sel = []
 
     with st.expander("🏥 Perfil Clínico", expanded=False):
         if "tipo_entrada" in df_completo.columns:
-            entradas    = sorted(df_completo["tipo_entrada"].dropna().unique())
+            _ent_vals = df_completo["tipo_entrada"].astype(str).replace("nan", "Não informado").replace(_NI_NORM)
+            entradas    = sorted(_ent_vals.unique())
             entrada_sel = st.multiselect("Tipo de Entrada", entradas, default=entradas)
         else:
             entradas = []; entrada_sel = []
@@ -404,10 +410,10 @@ if "forma" in df.columns:
     df = df[df["forma"].isin(forma_vals) | df["forma"].isna()]
 
 if racas and raca_sel and len(raca_sel) < len(racas):
-    df = df[df["raca_cor"].isin(raca_sel)]
+    df = df[df["raca_cor"].astype(str).replace("nan", "Não informado").replace(_NI_NORM).isin(raca_sel)]
 
 if entradas and entrada_sel and len(entrada_sel) < len(entradas) and "tipo_entrada" in df.columns:
-    df = df[df["tipo_entrada"].isin(entrada_sel)]
+    df = df[df["tipo_entrada"].astype(str).replace("nan", "Não informado").replace(_NI_NORM).isin(entrada_sel)]
 
 if tem_hiv:
     hiv_vals = ([h for h, v in [
@@ -646,7 +652,6 @@ with tab1:
             st.plotly_chart(fig_uf, use_container_width=True, config=PLOTLY_CFG)
 
 # ── ABA 2: PERFIL — pirâmide de casos + pirâmide de óbitos (Raquel ponto 5) ──
-_INVAL = ["nan", "None", "undefined", "Nao informado", "Não informado", "Ignorado", ""]
 
 with tab2:
     c1, c2 = st.columns(2)
@@ -654,20 +659,26 @@ with tab2:
         st.subheader("Por Sexo")
         st.caption("Distribuição dos casos entre homens e mulheres. Historicamente, a TB afeta mais homens no Brasil.")
         if "sexo" in df.columns:
-            d = df["sexo"].value_counts().reset_index()
+            d = df["sexo"].astype(str).replace("nan", "Não informado").replace(_NI_NORM).value_counts().reset_index()
             d.columns = ["Sexo", "Casos"]
             d = d[~d["Sexo"].isin(_INVAL)]
             graficos.safe_pie(d, "Sexo", "Casos", height=H_SMALL)
+            n_ign_sexo = int(df["sexo"].isna().sum() + df["sexo"].isin(["Ignorado", "Nao informado", "Não informado"]).sum())
+            if n_ign_sexo > 0:
+                st.caption(f"⚠️ {n_ign_sexo:,} casos com sexo não informado/ignorado não aparecem no gráfico acima.")
         else:
             grafico_vazio()
     with c2:
         st.subheader("Forma Clínica")
         st.caption("**Pulmonar**: TB nos pulmões — transmissível pelo ar. **Extrapulmonar**: TB em outros órgãos (gânglios, ossos, rins). A forma pulmonar representa maior risco de contágio.")
         if "forma" in df.columns:
-            d = df["forma"].value_counts().reset_index()
+            d = df["forma"].astype(str).replace("nan", "Não informado").replace(_NI_NORM).value_counts().reset_index()
             d.columns = ["Forma", "Casos"]
             d = d[~d["Forma"].isin(_INVAL)]
             graficos.safe_pie(d, "Forma", "Casos", height=H_SMALL)
+            n_ign_forma = int(df["forma"].isna().sum() + df["forma"].isin(["Ignorado", "Nao informado", "Não informado"]).sum())
+            if n_ign_forma > 0:
+                st.caption(f"⚠️ {n_ign_forma:,} casos com forma clínica não informada/ignorada não aparecem no gráfico acima.")
         else:
             grafico_vazio()
 
@@ -676,7 +687,7 @@ with tab2:
         st.subheader("Tipo de Entrada")
         st.caption("**Caso Novo**: paciente diagnosticado com TB pela primeira vez. **Recidiva**: paciente que já teve TB e foi curado, mas voltou a adoecer. **Reingresso após abandono**: paciente que interrompeu o tratamento e retornou.")
         if "tipo_entrada" in df.columns:
-            d = df["tipo_entrada"].value_counts().reset_index()
+            d = df["tipo_entrada"].astype(str).replace("nan", "Não informado").replace(_NI_NORM).value_counts().reset_index()
             d.columns = ["Tipo", "Casos"]
             d = d[~d["Tipo"].isin(_INVAL)]
             graficos.safe_pie(d, "Tipo", "Casos", height=H_SMALL)
@@ -689,9 +700,9 @@ with tab2:
         st.subheader("Por Raça/Cor")
         st.caption("A TB afeta desproporcionalmente populações negras e indígenas no Brasil, refletindo desigualdades socioeconômicas no acesso à saúde.")
         if "raca_cor" in df.columns:
-            d = df["raca_cor"].value_counts().reset_index()
+            d = df["raca_cor"].astype(str).replace("nan", "Não informado").replace(_NI_NORM).value_counts().reset_index()
             d.columns = ["Raça", "Casos"]
-            d = d[~d["Raça"].isin(["nan", "Ignorado", "Nao informado"])]
+            d = d[~d["Raça"].isin(["nan", "None"])]
             graficos.safe_bar_v(d, "Raça", "Casos", height=H_MEDIUM)
         else:
             grafico_vazio()
@@ -700,7 +711,7 @@ with tab2:
         st.caption("Como o caso foi concluído: **Cura** (tratamento completo), **Abandono** (interrompeu o tratamento), **Óbito por TB** (faleceu pela doença). Alta taxa de cura indica programa de controle eficaz.")
         col_enc = "situacao_enc_norm" if "situacao_enc_norm" in df.columns else "situacao_encerramento"
         if col_enc in df.columns:
-            d = df[col_enc].value_counts().reset_index()
+            d = df[col_enc].astype(str).replace("nan", "Não informado").replace(_NI_NORM).value_counts().reset_index()
             d.columns = ["Situação", "Casos"]
             d = d[~d["Situação"].isin(_INVAL)]
             graficos.safe_bar_h(d.sort_values("Casos", ascending=False), "Casos", "Situação", height=H_MEDIUM)
@@ -734,7 +745,7 @@ with tab3:
         st.subheader("Status HIV")
         st.caption("Resultado do teste de HIV entre os pacientes com TB. Pacientes com HIV têm imunidade reduzida, tornando a TB mais grave e difícil de tratar.")
         if "status_hiv" in df.columns:
-            d = df["status_hiv"].value_counts().reset_index()
+            d = df["status_hiv"].astype(str).replace("nan", "Não informado").replace(_NI_NORM).value_counts().reset_index()
             d.columns = ["HIV", "Casos"]
             d = d[~d["HIV"].isin(_INVAL)]
             graficos.safe_pie(d, "HIV", "Casos", height=H_SMALL)
@@ -744,7 +755,7 @@ with tab3:
         st.subheader("Baciloscopia — 1ª amostra")
         st.caption("Exame de escarro que detecta a bactéria da TB. **Positivo**: bactéria encontrada (caso confirmado e transmissível). **Negativo**: bactéria não detectada nesta amostra.")
         if "baciloscopia_primeira_amostra" in df.columns:
-            d = df["baciloscopia_primeira_amostra"].value_counts().reset_index()
+            d = df["baciloscopia_primeira_amostra"].astype(str).replace("nan", "Não informado").replace(_NI_NORM).value_counts().reset_index()
             d.columns = ["Resultado", "Casos"]
             d = d[~d["Resultado"].isin(_INVAL)]
             graficos.safe_pie(d, "Resultado", "Casos", height=H_SMALL)
@@ -756,7 +767,7 @@ with tab3:
         st.subheader("Teste Molecular Rápido (TMR-TB)")
         st.caption("Exame moderno que detecta a TB e já identifica resistência ao principal antibiótico (rifampicina) em poucas horas. Mais preciso e rápido que a baciloscopia tradicional.")
         if "teste_molecular" in df.columns:
-            d = df["teste_molecular"].value_counts().reset_index()
+            d = df["teste_molecular"].astype(str).replace("nan", "Não informado").replace(_NI_NORM).value_counts().reset_index()
             d.columns = ["Resultado", "Casos"]
             d = d[~d["Resultado"].isin(_INVAL)]
             graficos.safe_pie(d, "Resultado", "Casos", height=H_SMALL)

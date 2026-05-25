@@ -6,6 +6,6 @@ duckdb>=0.10
 plotly>=5.20
 folium>=0.19
 streamlit-folium>=0.2
-pygwalker>=0.5
+pygwalker==0.4.9
 requests>=2.31
 python-dotenv>=1.0

@@ -3,6 +3,7 @@ base = "dark"
 
 [server]
 maxUploadSize = 50
+maxMessageSize = 400
 runOnSave = false
 fileWatcherType = "none"
 
