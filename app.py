@@ -29,6 +29,7 @@ from src.dados import (
 )
 from src import graficos
 from src import mapa_interativo
+from streamlit_folium import st_folium
 
 # Valores inválidos a excluir dos gráficos (valores técnicos, não categorias epidemiológicas)
 _INVAL = ["nan", "None", "undefined", ""]
@@ -493,6 +494,10 @@ mortalidade  = round(obito_tb / pop_filtrada * 100_000, 1)
 
 if "metric_mapa" not in st.session_state:
     st.session_state.metric_mapa = "casos"
+if "selected_uf" not in st.session_state:
+    st.session_state.selected_uf = None
+if "mapa_key_counter" not in st.session_state:
+    st.session_state.mapa_key_counter = 0
 
 # ── KPI cards — ordem Raquel: incid | mort | óbitos | HIV / cura | abandono | total | municípios
 _cards = [
@@ -537,6 +542,66 @@ st.divider()
 # ══════════════════════════════════════════════════════════════════════════════
 #  ABAS
 # ══════════════════════════════════════════════════════════════════════════════
+@st.dialog("Distribuição por Município", width="large")
+def _modal_municipios(uf: str, df_modal: pd.DataFrame) -> None:
+    nome = mapa_interativo.uf_para_nome(uf)
+    mask = df_modal["estado_notificacao"].astype(str).map(UF_SIGLAS) == uf
+    total_uf = int(mask.sum())
+    st.markdown(f"**{nome} ({uf})** · {total_uf:,} notificações · 2025")
+
+    m_est = mapa_interativo.mapa_estado(df_modal, uf)
+    if m_est is not None:
+        st_folium(m_est, height=480, use_container_width=True,
+                  key=f"dialog_{uf}", returned_objects=[])
+    else:
+        st.warning(f"GeoJSON de {uf} não encontrado.")
+
+    if mask.any():
+        st.divider()
+        total_mun = df_modal.loc[mask, "municipio_notificacao"].astype(str).nunique()
+        top_n = st.select_slider(
+            "Exibir top municípios:",
+            options=[10, 15, 20],
+            value=15,
+            key=f"top_n_{uf}",
+        )
+        top_mun = (
+            df_modal.loc[mask, "municipio_notificacao"].astype(str)
+            .value_counts().head(top_n).reset_index()
+            .rename(columns={"municipio_notificacao": "municipio", "count": "casos"})
+            .sort_values("casos", ascending=True)
+        )
+        st.caption(f"Exibindo top {top_n} de {total_mun} municípios com notificações")
+        max_casos = int(top_mun["casos"].max())
+        margem_dir = max(60, len(f"{max_casos:,}") * 9)
+        fig_mun = px.bar(top_mun, x="casos", y="municipio", orientation="h",
+                         color="casos", color_continuous_scale="YlOrRd",
+                         labels={"casos": "Casos", "municipio": ""},
+                         text="casos")
+        fig_mun.update_layout(
+            height=max(320, top_n * 26), showlegend=False, coloraxis_showscale=False,
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+            font_color="#c9d1d9", margin=dict(l=0, r=margem_dir, t=10, b=0),
+            xaxis=dict(type="log", title="Casos (escala log)"),
+        )
+        fig_mun.update_traces(
+            marker_line_color="#0d1117", marker_line_width=1,
+            texttemplate="%{text:,}", textposition="outside",
+            cliponaxis=False,
+            hovertemplate="<b>%{y}</b><br>Casos: %{x:,}<extra></extra>",
+        )
+        st.plotly_chart(fig_mun, use_container_width=True)
+
+        with st.expander(f"📋 Ver todos os {total_mun} municípios"):
+            tabela = (
+                df_modal.loc[mask, "municipio_notificacao"].astype(str)
+                .value_counts().reset_index()
+                .rename(columns={"municipio_notificacao": "Município", "count": "Casos"})
+            )
+            tabela.index = range(1, len(tabela) + 1)
+            st.dataframe(tabela, use_container_width=True, height=300)
+
+
 tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
     "🗺️ Distribuição Geográfica",
     "👥 Perfil dos Pacientes",
@@ -548,97 +613,83 @@ tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
 
 # ── ABA 1: MAPA ───────────────────────────────────────────────────────────────
 with tab1:
-    col_mapa, col_uf = st.columns([2, 1])
-    _metric = st.session_state.get("metric_mapa", "casos")
+    _metric      = st.session_state.get("metric_mapa", "casos")
+    _selected_uf = st.session_state.get("selected_uf")
 
-    casos_uf  = df.groupby("uf_sigla").size().reset_index(name="casos")
-    enc_s     = enc_norm.copy()
-    enc_s.index = df.index
-    obitos_uf = (df.assign(_enc=enc_s)[df.assign(_enc=enc_s)["_enc"] == "Obito por TB"]
-                 .groupby("uf_sigla").size().reset_index(name="obitos")
-                 if "uf_sigla" in df.columns else pd.DataFrame(columns=["uf_sigla","obitos"]))
-    casos_uf  = casos_uf.merge(obitos_uf, on="uf_sigla", how="left")
+    # Agrega casos/incidência/mortalidade por UF
+    casos_uf = df.groupby("uf_sigla").size().reset_index(name="casos")
+    enc_s = enc_norm.copy(); enc_s.index = df.index
+    obitos_uf = (
+        df.assign(_enc=enc_s)[df.assign(_enc=enc_s)["_enc"] == "Obito por TB"]
+        .groupby("uf_sigla").size().reset_index(name="obitos")
+        if "uf_sigla" in df.columns else pd.DataFrame(columns=["uf_sigla", "obitos"])
+    )
+    casos_uf = casos_uf.merge(obitos_uf, on="uf_sigla", how="left")
     casos_uf["obitos"]      = casos_uf["obitos"].fillna(0).astype(int)
     casos_uf["populacao"]   = casos_uf["uf_sigla"].map(POP_ESTADO)
     casos_uf["incidencia"]  = (casos_uf["casos"]  / casos_uf["populacao"] * 100_000).round(1)
     casos_uf["mortalidade"] = (casos_uf["obitos"] / casos_uf["populacao"] * 100_000).round(1)
 
-    # Raquel ponto 1: padronizar "por 100 mil hab." em vez de "100k"
     _cfg = {
-        "casos":       ("casos",       "Total de Casos por Estado",
-                        "Total de Casos",                   "YlOrRd", "YlOrRd"),
-        "incidencia":  ("incidencia",  "Coeficiente de Incidência por 100 mil hab. — Brasil",
-                        "Incidência por 100 mil hab.",      "YlOrRd", "YlOrRd"),
-        "mortalidade": ("mortalidade", "Coeficiente de Mortalidade por 100 mil hab. — Brasil",
-                        "Mortalidade por 100 mil hab.",     "OrRd",   "OrRd"),
+        "casos":       ("casos",      "Total de Casos por Estado",                          "Total de Casos",             "YlOrRd"),
+        "incidencia":  ("incidencia", "Coeficiente de Incidência por 100 mil hab. — Brasil", "Incidência por 100 mil hab.", "YlOrRd"),
+        "mortalidade": ("mortalidade","Coeficiente de Mortalidade por 100 mil hab. — Brasil","Mortalidade por 100 mil hab.","OrRd"),
     }
-    _col_mapa, _titulo_mapa, _leg_mapa, _pal_folium, _pal_plotly = _cfg.get(_metric, _cfg["casos"])
+    _col_mapa, _titulo_mapa, _leg_mapa, _pal_plotly = _cfg.get(_metric, _cfg["casos"])
+
+    col_mapa, col_uf = st.columns([2, 1])
 
     with col_mapa:
         st.subheader(_titulo_mapa)
-        # Lazy import: folium só carrega quando o mapa é renderizado (~2s economizados em cada rerun)
-        try:
-            import folium
-            from streamlit_folium import st_folium
-            _folium_ok = True
-        except ImportError:
-            _folium_ok = False
+        st.caption("💡 Clique num estado no mapa ou selecione abaixo para ver os municípios.")
+        # Lê estado atual do selectbox para destacar no mapa (persiste entre reruns)
+        _sel_box = st.session_state.get("sel_estado_tab1", "")
+        _highlighted_uf = (
+            _sel_box.split(" — ")[0].strip()
+            if _sel_box and _sel_box != "— selecione um estado —"
+            else None
+        )
 
-        if _folium_ok:
-            try:
-                # GeoJSON enriquecido com cache: deepcopy só refaz quando casos_uf muda
-                gj = geojson_enriquecido(casos_uf)
-                m = folium.Map(location=[-14, -52], zoom_start=4,
-                               tiles="CartoDB dark_matter", prefer_canvas=True)
-                folium.Choropleth(
-                    geo_data=gj, data=casos_uf,
-                    columns=["uf_sigla", _col_mapa],
-                    key_on="feature.properties.sigla",
-                    fill_color=_pal_folium, fill_opacity=0.85,
-                    line_color="#30363d", line_opacity=0.8,
-                    legend_name=_leg_mapa,
-                    nan_fill_color="#21262d", nan_fill_opacity=0.4,
-                    highlight=True,
-                ).add_to(m)
-                folium.GeoJson(
-                    gj, name="tooltip",
-                    style_function=lambda _: {"fillOpacity": 0, "color": "transparent", "weight": 0},
-                    highlight_function=lambda _: {"fillOpacity": 0.15, "fillColor": "#fff",
-                                                  "weight": 2, "color": "#fff"},
-                    tooltip=folium.GeoJsonTooltip(
-                        fields=["name", "incidencia", "mortalidade", "casos"],
-                        aliases=["Estado:", "Incid./100 mil hab.:", "Mort./100 mil hab.:", "Total de casos:"],
-                        localize=True, sticky=True, labels=True,
-                        style=("background-color:#161b22;color:#f0f6fc;"
-                               "font-family:monospace;font-size:12px;"
-                               "border:1px solid #30363d;border-radius:6px;padding:6px;"),
-                    ),
-                ).add_to(m)
-                st_folium(m, use_container_width=True, height=520, returned_objects=[])
-            except Exception as e:
-                st.warning(f"Mapa Folium indisponível: {e}")
-                try:
-                    geojson = carregar_geojson()
-                    st.plotly_chart(graficos.fig_mapa(df, geojson),
-                                    use_container_width=True, config=PLOTLY_CFG)
-                except Exception:
-                    st.info("GeoJSON não encontrado. Execute: python scripts/baixar_geojson.py")
-        else:
-            try:
-                geojson = carregar_geojson()
-                st.plotly_chart(graficos.fig_mapa(df, geojson),
-                                use_container_width=True, config=PLOTLY_CFG)
-            except Exception:
-                st.info("GeoJSON não encontrado. Execute: python scripts/baixar_geojson.py")
+        fig_mapa = mapa_interativo.fig_brasil(casos_uf, metrica=_metric, selected_uf=_highlighted_uf)
+        ev = st.plotly_chart(fig_mapa, on_select="rerun", key=f"mapa_br_{st.session_state.mapa_key_counter}", use_container_width=True)
+
+        # on_change: só dispara quando usuário realmente muda o valor
+        def _sel_changed():
+            sel = st.session_state.get("sel_estado_tab1", "")
+            if sel and sel != "— selecione um estado —":
+                st.session_state["_dialog_uf"] = sel.split(" — ")[0].strip()
+
+        _ufs_disp = sorted(casos_uf["uf_sigla"].dropna().unique().tolist())
+        _uf_nomes = {u: f"{u} — {mapa_interativo.uf_para_nome(u)}" for u in _ufs_disp}
+        st.selectbox(
+            "Explorar municípios:",
+            ["— selecione um estado —"] + [_uf_nomes[u] for u in _ufs_disp],
+            key="sel_estado_tab1",
+            label_visibility="collapsed",
+            on_change=_sel_changed,
+        )
+
+        # Clique no mapa enfileira — mas não sobrescreve seleção do dropdown no mesmo ciclo
+        if ev and ev.selection and ev.selection.points:
+            if not st.session_state.get("_dialog_uf"):
+                uf_clicado = ev.selection.points[0].get("location")
+                if uf_clicado:
+                    st.session_state["_dialog_uf"] = uf_clicado
+
+        # Abre o modal uma única vez e consome o trigger
+        if st.session_state.get("_dialog_uf"):
+            _uf = st.session_state.pop("_dialog_uf")
+            st.session_state.mapa_key_counter += 1  # reseta seleção do mapa
+            _modal_municipios(_uf, df)
 
     with col_uf:
         st.subheader(_leg_mapa + " por Estado")
         if _metric == "incidencia":
-            st.caption("📌 Incidência por 100 mil hab.: a cada 100.000 pessoas no estado, quantas foram diagnosticadas com TB. Permite comparar estados de tamanhos diferentes de forma justa.")
+            st.caption("📌 Incidência por 100 mil hab.: permite comparar estados de tamanhos diferentes.")
         elif _metric == "mortalidade":
-            st.caption("📌 Mortalidade por 100 mil hab.: a cada 100.000 pessoas no estado, quantas morreram de TB. Estados com valor mais alto precisam de atenção prioritária.")
+            st.caption("📌 Mortalidade por 100 mil hab.: estados com valor mais alto precisam de atenção prioritária.")
         else:
-            st.caption("📌 Total absoluto de casos notificados no estado. Estados mais populosos tendem a ter mais casos — use a aba de incidência para comparar de forma justa.")
+            st.caption("📌 Total absoluto de casos notificados no estado.")
         por_uf = casos_uf.sort_values(_col_mapa, ascending=True)
         if not por_uf.empty:
             fig_uf = px.bar(por_uf, x=_col_mapa, y="uf_sigla", orientation="h",
@@ -903,15 +954,61 @@ with tab5:
             except Exception as e:
                 st.warning(f"Erro ao carregar indicadores históricos: {e}")
 
-# ── ABA 6: ANÁLISE LIVRE ──────────────────────────────────────────────────────────────────────────────
+# ── ABA 6: ANÁLISE LIVRE ─────────────────────────────────────────────────────
 with tab6:
-    st.subheader("Análise Livre")
-    st.caption("Explore os dados do jeito que quiser: arraste os campos para os eixos, filtre, agrupe e crie seus próprios gráficos. Ideal para investigar hipóteses específicas sem precisar de código.")
-    df_analise = selecionar_colunas(df, COLUNAS_ANALISE)
-    st.info(
-        f"**{len(df_analise):,}** registros  |  "
-        f"**{len(df_analise.columns)}** variáveis disponíveis",
-        icon="📊",
+    st.subheader("🔬 Análise Livre")
+    st.caption(
+        "Monte seus próprios gráficos arrastando campos para os eixos — "
+        "sem precisar de código. Ideal para investigar hipóteses específicas."
     )
-    spec = SPEC_PATH if Path(SPEC_PATH).exists() else None
-    render_pygwalker(df_analise, spec_path=spec)
+
+    df_analise = selecionar_colunas(df, COLUNAS_ANALISE)
+    n_registros = len(df_analise)
+    n_colunas   = len(df_analise.columns)
+
+    col_info, col_csv = st.columns([3, 1])
+    with col_info:
+        st.info(
+            f"📊 **{n_registros:,}** registros  ·  **{n_colunas}** variáveis  "
+            f"· filtros da sidebar já aplicados",
+        )
+    with col_csv:
+        csv_bytes = df_analise.to_csv(index=False).encode("utf-8")
+        st.download_button(
+            label="⬇️ Baixar CSV",
+            data=csv_bytes,
+            file_name=f"sinan_tb_{'-'.join(str(a) for a in anos_sel)}.csv",
+            mime="text/csv",
+            use_container_width=True,
+        )
+
+    st.divider()
+
+    if not st.session_state.get("abrir_pygwalker"):
+        st.markdown(
+            """
+            <div style='text-align:center;padding:40px 20px'>
+              <div style='font-size:3rem'>🧪</div>
+              <h3 style='color:#f0f6fc;margin:12px 0 8px'>Exploração interativa de dados</h3>
+              <p style='color:#8b949e;max-width:520px;margin:0 auto 24px'>
+                Arraste campos para os eixos, filtre, agrupe e crie gráficos personalizados.
+                A ferramenta carrega <b>{:,} registros</b> — pode levar alguns segundos
+                dependendo da sua conexão.
+              </p>
+            </div>
+            """.format(n_registros),
+            unsafe_allow_html=True,
+        )
+        col_l, col_btn, col_r = st.columns([2, 1, 2])
+        with col_btn:
+            if st.button("▶ Abrir Análise", use_container_width=True, type="primary"):
+                st.session_state["abrir_pygwalker"] = True
+                st.session_state.pop("_dialog_uf", None)
+                st.session_state.mapa_key_counter += 1  # reseta seleção do mapa
+                st.rerun()
+    else:
+        spec = SPEC_PATH if Path(SPEC_PATH).exists() else None
+        render_pygwalker(df_analise, spec_path=spec)
+        if st.button("✕ Fechar Análise", key="fechar_pygwalker"):
+            st.session_state["abrir_pygwalker"] = False
+            st.rerun()
