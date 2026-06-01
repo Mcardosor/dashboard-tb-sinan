@@ -14,6 +14,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.constantes import UF_SIGLAS, anos_disponiveis
 from src.dados import carregar_dados, enriquecer_df, agregar_por_uf
+from src.styles import inject_css_page
 from src import mapa_interativo
 
 st.set_page_config(
@@ -22,17 +23,7 @@ st.set_page_config(
     layout="wide",
 )
 
-st.markdown("""
-<style>
-  [data-testid="stAppViewContainer"] { background-color: #0e1117; }
-  [data-testid="stSidebar"]          { background-color: #161b22; }
-  [data-testid="stSidebar"] *        { color: #e6edf3 !important; }
-  h1, h2, h3                         { color: #f0f6fc; }
-  p, span, label                     { color: #c9d1d9; }
-  [data-testid="stCaption"]          { color: #8b949e; }
-  .block-container { padding-top: 2rem !important; max-width: 1400px; }
-</style>
-""", unsafe_allow_html=True)
+inject_css_page()
 
 # ── Sidebar: filtros de ano ───────────────────────────────────────────────────
 with st.sidebar:
