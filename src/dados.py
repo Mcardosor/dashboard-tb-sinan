@@ -174,3 +174,27 @@ def load_municipios() -> pd.DataFrame:
         return mun[["codigo_6", "nome", "latitude", "longitude"]]
     except Exception:
         return pd.DataFrame(columns=["codigo_6", "nome", "latitude", "longitude"])
+
+
+def agregar_por_uf(df: pd.DataFrame, enc_norm: pd.Series | None = None) -> pd.DataFrame:
+    """
+    Agrega casos, óbitos, incidência e mortalidade por UF.
+    Retorna DataFrame com colunas: uf_sigla, casos, obitos, populacao, incidencia, mortalidade.
+    """
+    from src.constantes import POP_ESTADO
+    casos_uf = df.groupby("uf_sigla", observed=True).size().reset_index(name="casos")
+    if enc_norm is not None:
+        enc_s = enc_norm.copy()
+        enc_s.index = df.index
+        obitos_uf = (
+            df.assign(_enc=enc_s)[df.assign(_enc=enc_s)["_enc"] == "Obito por TB"]
+            .groupby("uf_sigla", observed=True).size().reset_index(name="obitos")
+        )
+        casos_uf = casos_uf.merge(obitos_uf, on="uf_sigla", how="left")
+    else:
+        casos_uf["obitos"] = 0
+    casos_uf["obitos"]      = casos_uf["obitos"].fillna(0).astype(int)
+    casos_uf["populacao"]   = casos_uf["uf_sigla"].map(POP_ESTADO)
+    casos_uf["incidencia"]  = (casos_uf["casos"]  / casos_uf["populacao"] * 100_000).round(1)
+    casos_uf["mortalidade"] = (casos_uf["obitos"] / casos_uf["populacao"] * 100_000).round(1)
+    return casos_uf

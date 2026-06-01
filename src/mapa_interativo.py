@@ -1,9 +1,9 @@
 """
-mapa_interativo.py — Mapas PyDeck com drill-down Brasil → Estado → Município.
+mapa_interativo.py — Mapas interativos do dashboard TB SINAN.
 
-PyDeck usa st.pydeck_chart() que é componente NATIVO do Streamlit.
-Sem iframe, sem CDN dependente, sem token Mapbox.
-Tiles: CARTO_DARK (funciona sem token).
+Plotly Choroplethmapbox: mapa do Brasil por estado (aba principal).
+Folium: mapa drill-down por estado/município (modal e página dedicada).
+Tiles: CARTO dark matter (sem token necessário).
 """
 
 import gzip
@@ -16,10 +16,7 @@ import branca.colormap as cm
 import folium
 import pandas as pd
 import plotly.graph_objects as go
-import pydeck as pdk
 import streamlit as st
-from shapely.geometry import shape, mapping
-from shapely.ops import orient
 
 from src.constantes import UF_SIGLAS, POP_ESTADO
 
@@ -61,50 +58,6 @@ _UF_PARA_NOME: dict[str, str] = {v: k for k, v in UF_SIGLAS.items()}
 def uf_para_nome(uf: str) -> str:
     return _UF_PARA_NOME.get(uf, uf)
 
-
-# ── Colorscale YlOrRd → RGBA ──────────────────────────────────────────────────
-def _ylord_rgba(t: float, alpha: int = 210) -> list[int]:
-    """Interpola YlOrRd de 0→1 e retorna [R,G,B,A]."""
-    stops = [
-        (0.00, (255, 255, 229)),
-        (0.25, (253, 204, 138)),
-        (0.50, (240, 100,  50)),
-        (0.75, (209,  24,  24)),
-        (1.00, (103,   0,  13)),
-    ]
-    for i in range(len(stops) - 1):
-        t0, c0 = stops[i]
-        t1, c1 = stops[i + 1]
-        if t <= t1:
-            f = (t - t0) / (t1 - t0)
-            r = int(c0[0] + f * (c1[0] - c0[0]))
-            g = int(c0[1] + f * (c1[1] - c0[1]))
-            b = int(c0[2] + f * (c1[2] - c0[2]))
-            return [r, g, b, alpha]
-    return [103, 0, 13, alpha]
-
-
-def _blues_rgba(t: float, alpha: int = 210) -> list[int]:
-    """Interpola Blues de 0→1 e retorna [R,G,B,A]."""
-    stops = [
-        (0.00, (239, 243, 255)),
-        (0.33, (107, 174, 214)),
-        (0.66, ( 33, 113, 181)),
-        (1.00, (  8,  48, 107)),
-    ]
-    for i in range(len(stops) - 1):
-        t0, c0 = stops[i]
-        t1, c1 = stops[i + 1]
-        if t <= t1:
-            f = (t - t0) / (t1 - t0)
-            r = int(c0[0] + f * (c1[0] - c0[0]))
-            g = int(c0[1] + f * (c1[1] - c0[1]))
-            b = int(c0[2] + f * (c1[2] - c0[2]))
-            return [r, g, b, alpha]
-    return [8, 48, 107, alpha]
-
-
-_DARK_FILL = [28, 33, 40, 120]  # #1c2128 para z=0
 
 
 def fig_brasil(casos_uf: pd.DataFrame, metrica: str = "casos", selected_uf: str | None = None) -> go.Figure:
@@ -169,171 +122,6 @@ def fig_brasil(casos_uf: pd.DataFrame, metrica: str = "casos", selected_uf: str 
         clickmode="event+select",
     )
     return fig
-
-
-def _fix_winding(feature: dict) -> dict:
-    """Normaliza winding order dos polígonos para CCW (padrão GeoJSON/deck.gl)."""
-    try:
-        geom = shape(feature["geometry"])
-        if not geom.is_valid:
-            geom = geom.buffer(0)
-        geom = orient(geom, sign=1.0)  # exterior CCW, buracos CW
-        feature = dict(feature)
-        feature["geometry"] = mapping(geom)
-    except Exception:
-        pass
-    return feature
-
-
-# ── Mapa Brasil ───────────────────────────────────────────────────────────────
-def deck_brasil(casos_uf: pd.DataFrame, metrica: str = "casos") -> pdk.Deck:
-    """
-    Retorna pdk.Deck com coroplético dos estados.
-    Usar com st.pydeck_chart(deck, on_select='rerun').
-    """
-    col = {"casos": "casos", "incidencia": "incidencia", "mortalidade": "mortalidade"}.get(metrica, "casos")
-    data: dict[str, float] = {}
-    if not casos_uf.empty and col in casos_uf.columns:
-        data = dict(zip(casos_uf["uf_sigla"].astype(str), casos_uf[col].astype(float)))
-    max_val = max(data.values(), default=1.0)
-
-    geojson = _geo_estados()
-    # Adiciona fill_color e tooltip em cada feature
-    features = []
-    for feat in geojson.get("features", []):
-        f = _fix_winding(json.loads(json.dumps(feat)))
-        uf  = f["properties"].get("uf", "")
-        val = data.get(uf, 0.0)
-        t   = val / max_val if max_val > 0 else 0.0
-        f["properties"]["fill_color"] = _ylord_rgba(t) if val > 0 else _DARK_FILL
-        f["properties"]["tooltip"]    = f"{uf}\n{col.capitalize()}: {val:,.0f}"
-        features.append(f)
-
-    geo_data = {"type": "FeatureCollection", "features": features}
-
-    layer = pdk.Layer(
-        "GeoJsonLayer",
-        data=geo_data,
-        get_fill_color="properties.fill_color",
-        get_line_color=[255, 255, 255, 80],
-        line_width_min_pixels=1,
-        pickable=True,
-        auto_highlight=True,
-        highlight_color=[255, 255, 255, 60],
-        get_tooltip="properties.tooltip",
-    )
-
-    return pdk.Deck(
-        layers=[layer],
-        initial_view_state=pdk.ViewState(
-            latitude=-14.0, longitude=-51.0,
-            zoom=3.5, pitch=0, bearing=0,
-        ),
-        map_style=pdk.map_styles.CARTO_DARK,
-        tooltip={"text": "{properties.tooltip}"},
-    )
-
-
-# ── Mapa Estado ───────────────────────────────────────────────────────────────
-def deck_estado(df: pd.DataFrame, uf: str) -> pdk.Deck | None:
-    """
-    Retorna pdk.Deck com coroplético dos municípios do estado.
-    """
-    geojson = _geo_municipios(uf)
-    if geojson is None or not geojson.get("features"):
-        return None
-
-    # Agrega casos por município
-    mask = df["estado_notificacao"].astype(str).map(UF_SIGLAS) == uf
-    agg = (
-        df.loc[mask, "municipio_notificacao"]
-        .astype(str).value_counts().reset_index()
-        .rename(columns={"municipio_notificacao": "municipio", "count": "casos"})
-    )
-    agg["municipio_norm"] = agg["municipio"].map(_norm)
-    casos_map: dict[str, int] = dict(zip(agg["municipio_norm"], agg["casos"]))
-
-    max_val = max(casos_map.values(), default=1)
-
-    # Bounding box para ViewState
-    lats, lons = [], []
-    features = []
-    for feat in geojson.get("features", []):
-        f = _fix_winding(json.loads(json.dumps(feat)))
-        props = f["properties"]
-        nm_norm = props.get("NM_MUN_NORM", _norm(props.get("NM_MUN", "")))
-        val = casos_map.get(nm_norm, 0)
-        t   = val / max_val if max_val > 0 else 0.0
-        f["properties"]["fill_color"] = _blues_rgba(t) if val > 0 else _DARK_FILL
-        f["properties"]["casos"]      = val
-        f["properties"]["tooltip"]    = f"{props.get('NM_MUN', '')}\nCasos: {val:,}"
-        features.append(f)
-
-        # coleta coords para bbox
-        try:
-            coords = feat["geometry"]["coordinates"]
-            tp = feat["geometry"]["type"]
-            if tp == "Polygon":
-                for pt in coords[0]:
-                    lons.append(pt[0]); lats.append(pt[1])
-            elif tp == "MultiPolygon":
-                for poly in coords:
-                    for pt in poly[0]:
-                        lons.append(pt[0]); lats.append(pt[1])
-        except Exception:
-            pass
-
-    geo_data = {"type": "FeatureCollection", "features": features}
-
-    lat_c = (min(lats) + max(lats)) / 2 if lats else -14.0
-    lon_c = (min(lons) + max(lons)) / 2 if lons else -51.0
-    import math
-    max_diff = max(max(lats) - min(lats), max(lons) - min(lons)) if lats else 10
-    zoom = max(4.5, min(9.0, math.log2(360.0 / max(max_diff, 0.1)) + 1.0))
-
-    layer = pdk.Layer(
-        "GeoJsonLayer",
-        data=geo_data,
-        get_fill_color="properties.fill_color",
-        get_line_color=[255, 255, 255, 60],
-        line_width_min_pixels=1,
-        pickable=True,
-        auto_highlight=True,
-        highlight_color=[255, 255, 255, 60],
-    )
-
-    return pdk.Deck(
-        layers=[layer],
-        initial_view_state=pdk.ViewState(
-            latitude=lat_c, longitude=lon_c,
-            zoom=zoom, pitch=0, bearing=0,
-        ),
-        map_style=pdk.map_styles.CARTO_DARK,
-        tooltip={"text": "{properties.tooltip}"},
-    )
-
-
-# ── Extrai UF do evento pydeck ────────────────────────────────────────────────
-_UF_SET = set(UF_SIGLAS.values())
-
-def extrair_uf_pydeck(event) -> str | None:
-    """Extrai sigla UF do evento on_select do st.pydeck_chart."""
-    try:
-        if not event or not event.selection:
-            return None
-        objects = event.selection.objects
-        if not objects:
-            return None
-        for layer_objects in objects.values():
-            if layer_objects:
-                props = layer_objects[0].get("properties", {})
-                tooltip = props.get("tooltip", "")
-                uf = str(tooltip).split("\n")[0].strip()
-                if uf in _UF_SET:
-                    return uf
-    except Exception:
-        pass
-    return None
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -430,17 +218,61 @@ def mapa_estado(df: pd.DataFrame, uf: str) -> folium.Map | None:
         return None
 
     mask = df["estado_notificacao"].astype(str).map(UF_SIGLAS) == uf
-    agg = (df.loc[mask, "municipio_notificacao"].astype(str)
-             .value_counts().reset_index()
-             .rename(columns={"municipio_notificacao": "municipio", "count": "casos"}))
-    agg["municipio_norm"] = agg["municipio"].map(_norm)
-    casos_map = dict(zip(agg["municipio_norm"], agg["casos"]))
+    # converte categoricals para str para evitar erros de fillna/groupby
+    df_uf = df.loc[mask].copy()
+    for col in df_uf.select_dtypes("category").columns:
+        df_uf[col] = df_uf[col].astype(str)
 
+    # Agrega indicadores clínicos por município
+    enc_col = "situacao_enc_norm" if "situacao_enc_norm" in df_uf.columns else "situacao_encerramento"
+
+    def _pct(series, valor):
+        total = len(series)
+        return round(series.eq(valor).sum() / total * 100, 1) if total > 0 else 0.0
+
+    agg = df_uf.groupby("municipio_notificacao", observed=True).size().reset_index(name="casos")
+    agg["municipio_norm"] = agg["municipio_notificacao"].map(_norm)
+
+    if enc_col in df_uf.columns:
+        enc_grp = df_uf.groupby("municipio_notificacao", observed=True)[enc_col].agg(
+            cura     = lambda x: _pct(x, "Cura"),
+            abandono = lambda x: _pct(x, "Abandono"),
+            obitos   = lambda x: _pct(x, "Obito por TB"),
+        ).reset_index()
+        agg = agg.merge(enc_grp, on="municipio_notificacao", how="left")
+    else:
+        agg["cura"] = agg["abandono"] = agg["obitos"] = 0.0
+
+    if "status_hiv" in df_uf.columns:
+        hiv_grp = df_uf.groupby("municipio_notificacao", observed=True)["status_hiv"].agg(
+            hiv_pos=lambda x: _pct(x, "Positivo")
+        ).reset_index()
+        agg = agg.merge(hiv_grp, on="municipio_notificacao", how="left")
+    else:
+        agg["hiv_pos"] = 0.0
+
+    agg[["cura", "abandono", "obitos", "hiv_pos"]] = (
+        agg[["cura", "abandono", "obitos", "hiv_pos"]].fillna(0.0)
+    )
+    casos_map    = dict(zip(agg["municipio_norm"], agg["casos"]))
+    cura_map     = dict(zip(agg["municipio_norm"], agg["cura"]))
+    abandono_map = dict(zip(agg["municipio_norm"], agg["abandono"]))
+    obitos_map   = dict(zip(agg["municipio_norm"], agg["obitos"]))
+    hiv_map      = dict(zip(agg["municipio_norm"], agg["hiv_pos"]))
+
+    # Injeta indicadores nos properties do GeoJSON para o tooltip
     data: dict[str, int] = {}
     for feat in geojson["features"]:
         props = feat["properties"]
-        nm    = props.get("NM_MUN_NORM", _norm(props.get("NM_MUN", "")))
-        data[str(props["CD_MUN"])] = casos_map.get(nm, 0)
+        nm  = props.get("NM_MUN_NORM", _norm(props.get("NM_MUN", "")))
+        cd  = str(props["CD_MUN"])
+        val = casos_map.get(nm, 0)
+        data[cd] = val
+        props["CASOS"]    = f"{val:,}"
+        props["CURA"]     = f"{cura_map.get(nm, 0):.1f}%"
+        props["ABANDONO"] = f"{abandono_map.get(nm, 0):.1f}%"
+        props["OBITOS"]   = f"{obitos_map.get(nm, 0):.1f}%"
+        props["HIV"]      = f"{hiv_map.get(nm, 0):.1f}%"
 
     max_val = max(data.values(), default=1)
     cmap = _cmap_estado(max_val)
@@ -461,7 +293,7 @@ def mapa_estado(df: pd.DataFrame, uf: str) -> folium.Map | None:
             "color":       "#5a4a3a",
             "weight":      1.0,
             "opacity":     0.8,
-            "smoothFactor": 0,          # sem simplificação → elimina gaps
+            "smoothFactor": 0,
             "lineJoin":    "round",
             "lineCap":     "round",
         }
@@ -471,8 +303,14 @@ def mapa_estado(df: pd.DataFrame, uf: str) -> folium.Map | None:
         style_function=_style,
         highlight_function=lambda x: {"fillOpacity": 1.0, "weight": 2.0, "color": "#ffffff", "smoothFactor": 0},
         tooltip=folium.GeoJsonTooltip(
-            fields=["NM_MUN"], aliases=[""], labels=False, sticky=True,
-            style="background:#1c2128;color:#f0f6fc;font-size:12px;padding:3px 8px;border-radius:5px;border:none;",
+            fields=["NM_MUN", "CASOS", "CURA", "ABANDONO", "OBITOS", "HIV"],
+            aliases=["📍 Município", "📊 Casos", "✅ Cura", "⚠️ Abandono", "💀 Óbitos TB", "🔴 HIV+"],
+            labels=True,
+            sticky=True,
+            style=(
+                "background:#1c2128;color:#f0f6fc;font-size:12px;"
+                "padding:8px 12px;border-radius:6px;border:none;line-height:1.8;"
+            ),
         ),
     ).add_to(m)
     m.fit_bounds([sw, ne])

@@ -12,8 +12,8 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.constantes import UF_SIGLAS, POP_ESTADO, anos_disponiveis
-from src.dados import carregar_dados, enriquecer_df
+from src.constantes import UF_SIGLAS, anos_disponiveis
+from src.dados import carregar_dados, enriquecer_df, agregar_por_uf
 from src import mapa_interativo
 
 st.set_page_config(
@@ -55,19 +55,7 @@ if "map_selected_uf" not in st.session_state:
 _selected_uf = st.session_state.map_selected_uf
 
 # ── Agrega por UF ─────────────────────────────────────────────────────────────
-casos_uf = df.groupby("uf_sigla").size().reset_index(name="casos")
-casos_uf["populacao"]   = casos_uf["uf_sigla"].map(POP_ESTADO)
-casos_uf["incidencia"]  = (casos_uf["casos"] / casos_uf["populacao"] * 100_000).round(1)
-
-enc_col = "situacao_enc_norm" if "situacao_enc_norm" in df.columns else "situacao_encerramento"
-obitos = df[df.get(enc_col, pd.Series(dtype=str)).astype(str) == "Obito por TB"] if enc_col in df.columns else pd.DataFrame()
-if not obitos.empty and "uf_sigla" in obitos.columns:
-    ob_uf = obitos.groupby("uf_sigla").size().reset_index(name="obitos")
-    casos_uf = casos_uf.merge(ob_uf, on="uf_sigla", how="left")
-    casos_uf["obitos"] = casos_uf["obitos"].fillna(0).astype(int)
-else:
-    casos_uf["obitos"] = 0
-casos_uf["mortalidade"] = (casos_uf["obitos"] / casos_uf["populacao"] * 100_000).round(1)
+casos_uf = agregar_por_uf(df)
 
 # ── Layout ────────────────────────────────────────────────────────────────────
 if _selected_uf is None:

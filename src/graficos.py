@@ -13,10 +13,24 @@ import plotly.graph_objects as go
 from src.constantes import (
     UF_SIGLAS, AGRAVOS, POPULACOES, NORMALIZAR_DESFECHO,
     CORES_DESFECHOS, CORES_RACA, CORES_FORMA, ESCALA_MAPA,
-    BG, HOVER_LABEL, TB_COLORS, TB_SEQ_INCIDENCIA, TB_SEQ_MORTAL,
+    BG, HOVER_LABEL, PLOTLY_TEMPLATE, TB_COLORS, TB_SEQ_INCIDENCIA, TB_SEQ_MORTAL,
     CORES, H_SMALL, H_MEDIUM, H_LARGE,
-    tb_layout, tb_color_map, grafico_vazio, POP_ESTADO,
+    tb_color_map, POP_ESTADO,
 )
+
+
+def tb_layout(fig, titulo=None, altura=None):
+    """Aplica template TB padronizado em uma figura Plotly."""
+    fig.update_layout(**PLOTLY_TEMPLATE["layout"])
+    fig.update_layout(title_text=titulo if titulo else "")
+    if altura:
+        fig.update_layout(height=altura)
+    return fig
+
+
+def grafico_vazio():
+    """Exibe mensagem padrão quando não há dados para os filtros selecionados."""
+    st.info("Nenhum dado disponível para os filtros selecionados.")
 
 MESES_PT = {
     1: "Jan", 2: "Fev", 3: "Mar", 4: "Abr",

@@ -25,7 +25,7 @@ from src.constantes import (
 from src.dados import (
     carregar_dados, carregar_geojson, geojson_enriquecido,
     selecionar_colunas, render_pygwalker,
-    enriquecer_df, load_historico,
+    enriquecer_df, load_historico, agregar_por_uf,
 )
 from src import graficos
 from src import mapa_interativo
@@ -617,18 +617,7 @@ with tab1:
     _selected_uf = st.session_state.get("selected_uf")
 
     # Agrega casos/incidência/mortalidade por UF
-    casos_uf = df.groupby("uf_sigla").size().reset_index(name="casos")
-    enc_s = enc_norm.copy(); enc_s.index = df.index
-    obitos_uf = (
-        df.assign(_enc=enc_s)[df.assign(_enc=enc_s)["_enc"] == "Obito por TB"]
-        .groupby("uf_sigla").size().reset_index(name="obitos")
-        if "uf_sigla" in df.columns else pd.DataFrame(columns=["uf_sigla", "obitos"])
-    )
-    casos_uf = casos_uf.merge(obitos_uf, on="uf_sigla", how="left")
-    casos_uf["obitos"]      = casos_uf["obitos"].fillna(0).astype(int)
-    casos_uf["populacao"]   = casos_uf["uf_sigla"].map(POP_ESTADO)
-    casos_uf["incidencia"]  = (casos_uf["casos"]  / casos_uf["populacao"] * 100_000).round(1)
-    casos_uf["mortalidade"] = (casos_uf["obitos"] / casos_uf["populacao"] * 100_000).round(1)
+    casos_uf = agregar_por_uf(df, enc_norm)
 
     _cfg = {
         "casos":       ("casos",      "Total de Casos por Estado",                          "Total de Casos",             "YlOrRd"),

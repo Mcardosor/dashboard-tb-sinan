@@ -30,16 +30,16 @@ ANO_INICIO = 2001
 
 def parquet_path(ano: int) -> Path:
     """Retorna o caminho do Parquet tratado para um dado ano."""
-    return PASTA_DADOS / f"sinan_tube_{ano}_tratado.parquet"
+    return PASTA_DADOS / f"tuberculose_{ano}_tratado.parquet"
 
 
 def anos_disponiveis() -> list[int]:
     """Detecta automaticamente quais anos têm Parquet tratado disponível."""
-    arquivos = sorted(PASTA_DADOS.glob("sinan_tube_*_tratado.parquet"), reverse=True)
+    arquivos = sorted(PASTA_DADOS.glob("tuberculose_*_tratado.parquet"), reverse=True)
     anos = []
     for f in arquivos:
         try:
-            ano = int(f.stem.split("_")[2])
+            ano = int(f.stem.split("_")[1])
             anos.append(ano)
         except (IndexError, ValueError):
             pass
@@ -266,7 +266,7 @@ PLOTLY_CFG = {"scrollZoom": False}
 
 
 def tb_layout(fig, titulo=None, altura=None):
-    """Aplica template TB padronizado em uma figura Plotly."""
+    # mantido por compatibilidade — definição canônica em graficos.py
     fig.update_layout(**PLOTLY_TEMPLATE["layout"])
     fig.update_layout(title_text=titulo if titulo else "")
     if altura:
@@ -372,6 +372,6 @@ def kpi_card_html(title, value, delta_html, icon, accent, selected):
 
 
 def grafico_vazio():
-    """Exibe mensagem padrão quando não há dados para os filtros selecionados."""
-    import streamlit as st  # lazy import — só pago quando chamado
+    # mantido por compatibilidade — definição canônica em graficos.py
+    import streamlit as st
     st.info("Nenhum dado disponível para os filtros selecionados.")
