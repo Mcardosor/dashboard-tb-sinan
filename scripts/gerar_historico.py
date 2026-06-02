@@ -40,9 +40,9 @@ else:
     sys.exit(1)
 
 # ── Conecta DuckDB e registra view sobre os Parquets ─────────────────────────
-glob = (PASTA_DADOS / "sinan_tube_*_tratado.parquet").as_posix()
+glob = (PASTA_DADOS / "tuberculose_*_tratado.parquet").as_posix()
 
-arquivos = list(PASTA_DADOS.glob("sinan_tube_*_tratado.parquet"))
+arquivos = list(PASTA_DADOS.glob("tuberculose_*_tratado.parquet"))
 if not arquivos:
     print(f"Nenhum parquet tratado encontrado em {PASTA_DADOS}.")
     sys.exit(1)
