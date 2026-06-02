@@ -43,6 +43,13 @@ def render_sidebar() -> tuple[pd.DataFrame, pd.DataFrame, list, int, int, int]:
             anos_sel = [anos[0]]
         if len(anos_sel) > 2:
             st.caption(f"⚡ {len(anos_sel)} anos selecionados — carregamento pode levar alguns segundos.")
+        if 2026 in anos_sel:
+            st.warning(
+                "⚠️ **2026 — dados parciais**\n\n"
+                "O SINAN tem lag de notificação. Os registros de 2026 ainda estão sendo "
+                "processados e **não representam o total do ano**. Interprete com cautela.",
+                icon="⚠️",
+            )
 
         anos_key = tuple(sorted(anos_sel))
         df_completo = carregar_dados(anos_key)
