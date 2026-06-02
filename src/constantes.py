@@ -265,15 +265,6 @@ HOVER_LABEL = dict(
 PLOTLY_CFG = {"scrollZoom": False}
 
 
-def tb_layout(fig, titulo=None, altura=None):
-    # mantido por compatibilidade — definição canônica em graficos.py
-    fig.update_layout(**PLOTLY_TEMPLATE["layout"])
-    fig.update_layout(title_text=titulo if titulo else "")
-    if altura:
-        fig.update_layout(height=altura)
-    return fig
-
-
 # ── Alturas padrão de gráficos ─────────────────────────────────────────────────
 H_SMALL  = 300
 H_MEDIUM = 380
@@ -371,7 +362,3 @@ def kpi_card_html(title, value, delta_html, icon, accent, selected):
     )
 
 
-def grafico_vazio():
-    # mantido por compatibilidade — definição canônica em graficos.py
-    import streamlit as st
-    st.info("Nenhum dado disponível para os filtros selecionados.")
