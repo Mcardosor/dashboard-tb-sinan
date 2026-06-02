@@ -80,11 +80,7 @@ st.markdown(f"""
     temporais ({ANO_INICIO}–{ANO_ATUAL}).
   </p>
   <div class="hero-badges">
-    <span class="hero-badge accent"><span class="dot"></span>{_label_anos}</span>
-    {_badge_2026}
-    <span class="hero-badge"><span class="dot"></span>SINAN NET · Dicionário v5.0</span>
-    <span class="hero-badge success"><span class="dot"></span>{_label_regs}</span>
-    <span class="hero-badge"><span class="dot"></span>Série histórica: {ANO_INICIO}–{ANO_ATUAL}</span>
+    <span class="hero-badge accent"><span class="dot"></span>{_label_anos}</span>{_badge_2026}<span class="hero-badge"><span class="dot"></span>SINAN NET · Dicionário v5.0</span><span class="hero-badge success"><span class="dot"></span>{_label_regs}</span><span class="hero-badge"><span class="dot"></span>Série histórica: {ANO_INICIO}–{ANO_ATUAL}</span>
   </div>
 </div>
 """, unsafe_allow_html=True)
