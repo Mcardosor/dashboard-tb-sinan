@@ -611,7 +611,8 @@ with tab6:
                 st.rerun()
     else:
         spec = SPEC_PATH if Path(SPEC_PATH).exists() else None
-        render_pygwalker(df_analise, spec_path=spec)
+        with st.spinner(f"Carregando {n_registros:,} registros na ferramenta de análise..."):
+            render_pygwalker(df_analise, spec_path=spec)
         if st.button("✕ Fechar Análise", key="fechar_pygwalker"):
             st.session_state["abrir_pygwalker"] = False
             st.rerun()
