@@ -248,19 +248,27 @@ def _mapa_df(df: pd.DataFrame) -> folium.Map | None:
     obitos_df   = _pct(df_uf[enc_col].astype(str), "Obito por TB") if enc_col in df_uf.columns else 0.0
     hiv_df      = _pct(df_uf["status_hiv"].astype(str), "Positivo") if "status_hiv" in df_uf.columns else 0.0
 
-    # Mesma cor para todas as RAs — dados do DF inteiro
-    import math
-    cmap_df   = _cmap_estado(total_df)
-    cor_unica = cmap_df(math.log1p(total_df))
+    # Paleta categórica — cada RA recebe uma cor distinta
+    _PALETA_DF = [
+        "#58a6ff", "#f78166", "#7ee787", "#d2a8ff", "#ffa657",
+        "#79c0ff", "#ff7b72", "#56d364", "#e3b341", "#bc8cff",
+        "#4facfe", "#f093fb", "#43e97b", "#fa709a", "#fee140",
+        "#a18cd1", "#fbc2eb", "#a1c4fd", "#c2e9fb", "#fddb92",
+        "#d4fc79", "#96e6a1", "#f6d365", "#fda085", "#f5576c",
+        "#00f2fe", "#43e97b", "#38f9d7", "#667eea", "#764ba2",
+        "#30cfd0", "#fee140", "#f093fb", "#4facfe", "#96e6a1",
+    ]
 
     # Injeta propriedades nos features
-    for feat in geojson["features"]:
+    for i, feat in enumerate(geojson["features"]):
         props = feat["properties"]
-        props["CASOS"]    = f"{total_df:,}"
-        props["CURA"]     = f"{cura_df:.1f}%"
-        props["ABANDONO"] = f"{abandono_df:.1f}%"
-        props["OBITOS"]   = f"{obitos_df:.1f}%"
-        props["HIV"]      = f"{hiv_df:.1f}%"
+        props["FILL_COLOR"] = _PALETA_DF[i % len(_PALETA_DF)]
+        props["CASOS"]      = f"{total_df:,}"
+        props["CURA"]       = f"{cura_df:.1f}%"
+        props["ABANDONO"]   = f"{abandono_df:.1f}%"
+        props["OBITOS"]     = f"{obitos_df:.1f}%"
+        props["HIV"]        = f"{hiv_df:.1f}%"
+
     sw, ne = _bbox_geojson(geojson)
     center = [(sw[0] + ne[0]) / 2, (sw[1] + ne[1]) / 2]
 
@@ -270,11 +278,11 @@ def _mapa_df(df: pd.DataFrame) -> folium.Map | None:
     folium.GeoJson(
         geojson,
         style_function=lambda x: {
-            "fillColor":    cor_unica,
-            "fillOpacity":  0.80,
-            "color":        "#ffffff",
-            "weight":       0.8,
-            "opacity":      0.6,
+            "fillColor":    x["properties"].get("FILL_COLOR", "#58a6ff"),
+            "fillOpacity":  0.75,
+            "color":        "#0d1117",
+            "weight":       1.2,
+            "opacity":      0.9,
             "smoothFactor": 0,
         },
         highlight_function=lambda x: {"fillOpacity": 1.0, "weight": 2.0, "color": "#ffffff", "smoothFactor": 0},
