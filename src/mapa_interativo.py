@@ -261,8 +261,6 @@ def _mapa_df(df: pd.DataFrame) -> folium.Map | None:
         props["ABANDONO"] = f"{abandono_df:.1f}%"
         props["OBITOS"]   = f"{obitos_df:.1f}%"
         props["HIV"]      = f"{hiv_df:.1f}%"
-        props["NOTA"]     = "Dados do DF inteiro (SINAN não distingue RAs)"
-
     sw, ne = _bbox_geojson(geojson)
     center = [(sw[0] + ne[0]) / 2, (sw[1] + ne[1]) / 2]
 
@@ -281,8 +279,8 @@ def _mapa_df(df: pd.DataFrame) -> folium.Map | None:
         },
         highlight_function=lambda x: {"fillOpacity": 1.0, "weight": 2.0, "color": "#ffffff", "smoothFactor": 0},
         tooltip=folium.GeoJsonTooltip(
-            fields=["RA_NOME", "CASOS", "CURA", "ABANDONO", "OBITOS", "HIV", "NOTA"],
-            aliases=["📍 Região Adm.", "📊 Casos (DF)", "✅ Cura", "⚠️ Abandono", "💀 Óbitos TB", "🔴 HIV+", "ℹ️"],
+            fields=["RA_NOME", "CASOS", "CURA", "ABANDONO", "OBITOS", "HIV"],
+            aliases=["📍 Região Adm.", "📊 Casos (DF)", "✅ Cura", "⚠️ Abandono", "💀 Óbitos TB", "🔴 HIV+"],
             labels=True, sticky=True,
             style="background:#1c2128;color:#f0f6fc;font-size:12px;padding:8px 12px;border-radius:6px;border:none;line-height:1.8;",
         ),

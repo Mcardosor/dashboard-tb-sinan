@@ -160,6 +160,8 @@ def _modal_municipios(uf: str, df_modal: pd.DataFrame) -> None:
     if m_est is not None:
         st_folium(m_est, height=480, use_container_width=True,
                   key=f"dialog_{uf}", returned_objects=[])
+        if uf == "DF":
+            st.caption("ℹ️ O SINAN registra todos os casos do DF como 'Brasília', sem distinção por Região Administrativa. O mapa exibe as divisões geográficas reais das RAs, mas os dados de casos, cura e óbitos são do DF inteiro.")
     else:
         st.warning(f"GeoJSON de {uf} não encontrado.")
 
