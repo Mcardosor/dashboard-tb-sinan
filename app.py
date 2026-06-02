@@ -566,6 +566,62 @@ with tab6:
     )
 
     df_analise = selecionar_colunas(df, COLUNAS_ANALISE)
+
+    # Renomeia colunas para nomes amigáveis — facilita uso por leigos
+    _NOMES_AMIGAVEIS = {
+        "estado_notificacao":          "Estado",
+        "municipio_notificacao":       "Municipio",
+        "uf_residencia":               "UF Residencia",
+        "ano_notificacao":             "Ano",
+        "data_notificacao":            "Data Notificacao",
+        "data_diagnostico":            "Data Diagnostico",
+        "data_inicio_tratamento":      "Data Inicio Tratamento",
+        "data_encerramento":           "Data Encerramento",
+        "idade_anos":                  "Idade (anos)",
+        "sexo":                        "Sexo",
+        "raca_cor":                    "Raca/Cor",
+        "escolaridade":                "Escolaridade",
+        "tipo_entrada":                "Tipo de Entrada",
+        "forma":                       "Forma Clinica",
+        "situacao_encerramento":       "Situacao Encerramento",
+        "status_hiv":                  "Status HIV",
+        "uso_antirretroviral":         "Uso Antirretroviral",
+        "raio_x_torax":                "Raio-X Torax",
+        "baciloscopia_primeira_amostra": "Baciloscopia 1a Amostra",
+        "cultura_escarro":             "Cultura Escarro",
+        "histopatologia":              "Histopatologia",
+        "teste_molecular":             "Teste Molecular (TMR-TB)",
+        "teste_sensibilidade":         "Teste Sensibilidade",
+        "tratamento_supervisionado":   "Tratamento Supervisionado",
+        "baciloscopia_mes_1":          "Baciloscopia Mes 1",
+        "baciloscopia_mes_2":          "Baciloscopia Mes 2",
+        "baciloscopia_mes_3":          "Baciloscopia Mes 3",
+        "baciloscopia_mes_4":          "Baciloscopia Mes 4",
+        "baciloscopia_mes_5":          "Baciloscopia Mes 5",
+        "baciloscopia_mes_6":          "Baciloscopia Mes 6",
+        "baciloscopia_apos_6_meses":   "Baciloscopia Apos 6 Meses",
+        "agravo_aids":                 "Agravo AIDS",
+        "agravo_alcoolismo":           "Agravo Alcoolismo",
+        "agravo_diabetes":             "Agravo Diabetes",
+        "agravo_doenca_mental":        "Agravo Doenca Mental",
+        "agravo_drogas_ilicitas":      "Agravo Drogas Ilicitas",
+        "agravo_tabagismo":            "Agravo Tabagismo",
+        "populacao_privada_liberdade": "Privado de Liberdade",
+        "populacao_situacao_rua":      "Em Situacao de Rua",
+        "profissional_saude":          "Profissional de Saude",
+        "populacao_imigrante":         "Imigrante",
+        "beneficiario_governo":        "Beneficiario Gov.",
+        "numero_contatos":             "Numero de Contatos",
+        "numero_contatos_examinados":  "Contatos Examinados",
+        "tipo_notificacao":            "Tipo de Notificacao",
+        "uf_sigla":                    "UF",
+        "situacao_enc_norm":           "Desfecho",
+        "mes_num":                     "Mes",
+    }
+    df_analise = df_analise.rename(columns={
+        c: _NOMES_AMIGAVEIS[c] for c in df_analise.columns if c in _NOMES_AMIGAVEIS
+    })
+
     n_registros = len(df_analise)
     n_colunas   = len(df_analise.columns)
 
