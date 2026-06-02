@@ -129,8 +129,8 @@ def preparar(df: pd.DataFrame) -> pd.DataFrame:
 
 # ── Execução ──────────────────────────────────────────────────────────────────
 for ano in anos:
-    entrada = PASTA / f"sinan_tube_{ano}.parquet"
-    saida   = PASTA / f"sinan_tube_{ano}_tratado.parquet"
+    entrada = PASTA / f"tuberculose_{ano}.parquet"
+    saida   = PASTA / f"tuberculose_{ano}_tratado.parquet"
 
     if not entrada.exists():
         print(f"\n[{ano}] ⚠️  Arquivo não encontrado: {entrada} — rode conectar_banco.py {ano}")

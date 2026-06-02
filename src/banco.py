@@ -51,7 +51,7 @@ def _aplicar_categorias(df: pd.DataFrame) -> pd.DataFrame:
 
 def _glob() -> str:
     """Glob dos Parquets tratados (forward slashes para DuckDB em qualquer OS)."""
-    return (PASTA_DADOS / "sinan_tube_*_tratado.parquet").as_posix()
+    return (PASTA_DADOS / "tuberculose_*_tratado.parquet").as_posix()
 
 
 def _threads() -> int:
@@ -103,7 +103,7 @@ def anos_no_banco() -> list[int]:
     return sorted(
         [
             int(p.stem.split("_")[2])
-            for p in PASTA_DADOS.glob("sinan_tube_*_tratado.parquet")
+            for p in PASTA_DADOS.glob("tuberculose_*_tratado.parquet")
         ],
         reverse=True,
     )

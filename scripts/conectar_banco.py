@@ -26,7 +26,7 @@ from sqlalchemy import URL, create_engine
 load_dotenv()
 
 SCHEMA      = "silver"
-TABELA      = "sinan_tube"
+TABELA      = "tuberculose"
 PASTA_DADOS = Path("dados_dashboard")
 PASTA_DADOS.mkdir(exist_ok=True)
 
@@ -55,7 +55,7 @@ engine = create_engine(url, pool_pre_ping=True, connect_args={"sslmode": "disabl
 
 # -- Exportacao por ano -------------------------------------------------------
 for ano in anos:
-    saida = PASTA_DADOS / f"sinan_tube_{ano}.parquet"
+    saida = PASTA_DADOS / f"tuberculose_{ano}.parquet"
 
     print(f"\n[{ano}] Baixando dados de {SCHEMA}.{TABELA}...")
     inicio = time.time()
@@ -74,4 +74,4 @@ for ano in anos:
 
 n = len(anos)
 print(f"\nExportacao concluida: {n} ano(s)")
-print("Proximo passo: python scripts/preparar_dados.py ANO_INICIO ANO_FIM")
+print("Próximo passo: python scripts/preparar_dados.py ANO_INICIO ANO_FIM")
