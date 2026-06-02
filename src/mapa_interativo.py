@@ -34,6 +34,16 @@ def _geo_estados() -> dict:
 
 
 @st.cache_resource(show_spinner=False)
+def _geo_ras_df() -> dict | None:
+    """GeoJSON das Regiões Administrativas do DF (OpenStreetMap via Overpass)."""
+    p = Path("dados_dashboard") / "df_regioes_administrativas.geojson"
+    if not p.exists():
+        return None
+    with open(p, encoding="utf-8") as f:
+        return json.load(f)
+
+
+@st.cache_resource(show_spinner=False)
 def _geo_municipios(uf: str) -> dict | None:
     p = _GEO / "municipios" / f"uf={uf}" / "mun_simpl.geojson.gz"
     if not p.exists():
@@ -211,8 +221,83 @@ def mapa_brasil(casos_uf: pd.DataFrame, metrica: str = "casos") -> folium.Map:
     return m
 
 
+def _mapa_df(df: pd.DataFrame) -> folium.Map | None:
+    """
+    Mapa especial para o Distrito Federal:
+    desenha as 35 Regiões Administrativas (OSM) mas mostra os dados
+    do DF como um todo no tooltip — já que o SINAN não distingue RAs.
+    """
+    geojson = _geo_ras_df()
+    if geojson is None or not geojson.get("features"):
+        return None
+
+    mask = df["estado_notificacao"].astype(str).map(UF_SIGLAS) == "DF"
+    total_df  = int(mask.sum())
+    df_uf     = df.loc[mask].copy()
+    for col in df_uf.select_dtypes("category").columns:
+        df_uf[col] = df_uf[col].astype(str)
+
+    enc_col = "situacao_enc_norm" if "situacao_enc_norm" in df_uf.columns else "situacao_encerramento"
+
+    def _pct(series, valor):
+        total = len(series)
+        return round(series.eq(valor).sum() / total * 100, 1) if total > 0 else 0.0
+
+    cura_df     = _pct(df_uf[enc_col].astype(str), "Cura") if enc_col in df_uf.columns else 0.0
+    abandono_df = _pct(df_uf[enc_col].astype(str), "Abandono") if enc_col in df_uf.columns else 0.0
+    obitos_df   = _pct(df_uf[enc_col].astype(str), "Obito por TB") if enc_col in df_uf.columns else 0.0
+    hiv_df      = _pct(df_uf["status_hiv"].astype(str), "Positivo") if "status_hiv" in df_uf.columns else 0.0
+
+    # Mesma cor para todas as RAs — dados do DF inteiro
+    import math
+    cmap_df   = _cmap_estado(total_df)
+    cor_unica = cmap_df(math.log1p(total_df))
+
+    # Injeta propriedades nos features
+    for feat in geojson["features"]:
+        props = feat["properties"]
+        props["CASOS"]    = f"{total_df:,}"
+        props["CURA"]     = f"{cura_df:.1f}%"
+        props["ABANDONO"] = f"{abandono_df:.1f}%"
+        props["OBITOS"]   = f"{obitos_df:.1f}%"
+        props["HIV"]      = f"{hiv_df:.1f}%"
+        props["NOTA"]     = "Dados do DF inteiro (SINAN não distingue RAs)"
+
+    sw, ne = _bbox_geojson(geojson)
+    center = [(sw[0] + ne[0]) / 2, (sw[1] + ne[1]) / 2]
+
+    m = folium.Map(location=center, zoom_start=9, tiles=None, prefer_canvas=True)
+    folium.TileLayer(tiles=_CARTO_DARK, attr=_CARTO_ATTR, subdomains="abcd", max_zoom=18).add_to(m)
+
+    folium.GeoJson(
+        geojson,
+        style_function=lambda x: {
+            "fillColor":    cor_unica,
+            "fillOpacity":  0.80,
+            "color":        "#ffffff",
+            "weight":       0.8,
+            "opacity":      0.6,
+            "smoothFactor": 0,
+        },
+        highlight_function=lambda x: {"fillOpacity": 1.0, "weight": 2.0, "color": "#ffffff", "smoothFactor": 0},
+        tooltip=folium.GeoJsonTooltip(
+            fields=["RA_NOME", "CASOS", "CURA", "ABANDONO", "OBITOS", "HIV", "NOTA"],
+            aliases=["📍 Região Adm.", "📊 Casos (DF)", "✅ Cura", "⚠️ Abandono", "💀 Óbitos TB", "🔴 HIV+", "ℹ️"],
+            labels=True, sticky=True,
+            style="background:#1c2128;color:#f0f6fc;font-size:12px;padding:8px 12px;border-radius:6px;border:none;line-height:1.8;",
+        ),
+    ).add_to(m)
+    m.fit_bounds([sw, ne])
+    return m
+
+
+
 def mapa_estado(df: pd.DataFrame, uf: str) -> folium.Map | None:
     """Mapa Folium dos municípios de um estado — para uso na página dedicada."""
+    # Caso especial: DF usa Regiões Administrativas do OSM
+    if uf == "DF":
+        return _mapa_df(df)
+
     geojson = _geo_municipios(uf)
     if geojson is None or not geojson.get("features"):
         return None
