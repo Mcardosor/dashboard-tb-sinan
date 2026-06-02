@@ -73,7 +73,7 @@ st.markdown(f"""
   </p>
   <div class="hero-badges">
     <span class="hero-badge accent"><span class="dot"></span>{f"Anos {min(anos_sel)}–{max(anos_sel)}" if len(anos_sel) > 1 else f"Ano {anos_sel[0]}"}</span>
-    {"<span class='hero-badge' style='background:rgba(248,81,73,.15);border-color:rgba(248,81,73,.4);color:#f85149'><span class='dot'></span>2026 · dados parciais</span>" if 2026 in anos_sel else ""}
+    {('<span class="hero-badge" style="background:rgba(248,81,73,.15);border-color:rgba(248,81,73,.4);color:#f85149"><span class="dot"></span>2026 · dados parciais</span>') if 2026 in anos_sel else ""}
     <span class="hero-badge"><span class="dot"></span>SINAN NET · Dicionário v5.0</span>
     <span class="hero-badge success"><span class="dot"></span>{total_filt:,} registros ({pct_filt}% da base)</span>
     <span class="hero-badge"><span class="dot"></span>Série histórica: {ANO_INICIO}–{ANO_ATUAL}</span>
