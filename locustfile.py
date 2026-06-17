@@ -1,102 +1,182 @@
 """
 locustfile.py — Teste de carga do Dashboard TB | SINAN
 ───────────────────────────────────────────────────────
-Simula N usuários navegando simultaneamente no dashboard.
+Simula perfis reais de usuários com ramp-up progressivo.
 
-Executar:
-  locust -f locustfile.py --host http://10.20.10.64:8502 --users 20 --spawn-rate 2
-
-Ou com interface web (recomendado):
+Executar (interface web — recomendado):
   locust -f locustfile.py --host http://10.20.10.64:8502
   → abrir http://localhost:8089
+
+Executar headless com relatório HTML:
+  locust -f locustfile.py --host http://10.20.10.64:8502 \
+         --users 50 --spawn-rate 5 --run-time 5m --headless \
+         --csv=resultado_carga --html=resultado_carga.html
 """
 
 import time
-import random
 import threading
 import websocket
 from locust import HttpUser, task, between, events
+from locust import LoadTestShape
 
 
 BASE_PATH = "/cenarios/tb"
 
-# Abas disponíveis para simular navegação
-TABS = [0, 1, 2, 3, 4, 5]
 
-# Estados para simular cliques no mapa
-UFS = ["SP", "RJ", "MG", "BA", "AM", "CE", "PE", "RS", "PR", "GO"]
+# ══════════════════════════════════════════════════════════════════════════════
+#  PERFIS DE USUÁRIO
+# ══════════════════════════════════════════════════════════════════════════════
 
-# Anos disponíveis no filtro
-ANOS = [2022, 2023, 2024, 2025]
-
-
-class DashboardUser(HttpUser):
+class UsuarioPassivo(HttpUser):
     """
-    Simula um usuário real navegando pelo dashboard TB.
-    wait_time: pausa entre ações (3–10 segundos), simula leitura humana.
+    Usuário que abre o dashboard e lê sem interagir muito.
+    Representa ~50% do tráfego real — maior pausa entre ações.
     """
-    wait_time = between(3, 10)
-    ws_error_count = 0
-    ws_connected = 0
+    weight    = 5
+    wait_time = between(8, 20)
 
-    # ── Carregamento inicial ───────────────────────────────────────────────
     def on_start(self):
-        """Executado uma vez quando o usuário 'entra' no sistema."""
         self._carregar_pagina()
-        self._conectar_websocket()
+        self._abrir_websocket()
 
     def on_stop(self):
-        """Executado quando o usuário 'sai'."""
+        self._fechar_websocket()
+
+    @task(4)
+    def visualizar_dashboard(self):
+        self._carregar_pagina()
+
+    @task(1)
+    def verificar_health(self):
+        with self.client.get(
+            f"{BASE_PATH}/_stcore/health",
+            name="[health] /health",
+            catch_response=True,
+        ) as r:
+            if r.status_code == 200:
+                r.success()
+            else:
+                r.failure(f"Health retornou {r.status_code}")
+
+    def _carregar_pagina(self):
+        with self.client.get(
+            f"{BASE_PATH}/",
+            name="[página] carregar dashboard",
+            catch_response=True,
+        ) as r:
+            if r.status_code in (200, 301, 302):
+                r.success()
+            else:
+                r.failure(f"Página retornou {r.status_code}")
+
+    def _abrir_websocket(self):
+        host  = self.host.replace("http://", "ws://").replace("https://", "wss://")
+        url   = f"{host}{BASE_PATH}/_stcore/stream"
+        start = time.time()
+        try:
+            self._ws = websocket.WebSocketApp(
+                url,
+                on_open=lambda ws: None,
+                on_error=lambda ws, e: None,
+                on_close=lambda ws, *a: None,
+            )
+            threading.Thread(
+                target=self._ws.run_forever,
+                kwargs={"ping_interval": 20, "ping_timeout": 10},
+                daemon=True,
+            ).start()
+            events.request.fire(
+                request_type="WS", name="[ws] handshake",
+                response_time=int((time.time() - start) * 1000),
+                response_length=0, exception=None, context={},
+            )
+        except Exception as e:
+            events.request.fire(
+                request_type="WS", name="[ws] handshake",
+                response_time=int((time.time() - start) * 1000),
+                response_length=0, exception=e, context={},
+            )
+
+    def _fechar_websocket(self):
         if hasattr(self, "_ws") and self._ws:
             try:
                 self._ws.close()
             except Exception:
                 pass
 
-    # ── Tarefas simuladas ──────────────────────────────────────────────────
-    @task(3)
-    def navegar_abas(self):
-        """Clica em abas diferentes — ação mais comum."""
-        self.client.get(
-            f"{BASE_PATH}/",
-            name="[aba] Navegar",
-        )
 
-    @task(2)
-    def carregar_pagina_principal(self):
-        """Recarrega o dashboard (simula F5 ou entrada direta)."""
+class UsuarioAtivo(HttpUser):
+    """
+    Usuário que navega ativamente entre abas e recursos.
+    Representa ~35% do tráfego — pausa curta entre ações.
+    """
+    weight    = 3
+    wait_time = between(3, 8)
+
+    def on_start(self):
         self._carregar_pagina()
 
-    @task(2)
-    def carregar_assets_estaticos(self):
-        """Carrega JS/CSS estáticos — representa o primeiro acesso."""
-        paths = [
+    @task(5)
+    def navegar_abas(self):
+        with self.client.get(
+            f"{BASE_PATH}/",
+            name="[aba] navegar",
+            catch_response=True,
+        ) as r:
+            if r.status_code in (200, 301, 302):
+                r.success()
+            else:
+                r.failure(f"Aba retornou {r.status_code}")
+
+    @task(3)
+    def carregar_assets(self):
+        assets = [
             "/_stcore/static/js/main.chunk.js",
             "/_stcore/static/css/main.chunk.css",
-            "/_stcore/health",
+            f"{BASE_PATH}/_stcore/stream",
         ]
-        for path in random.sample(paths, k=min(2, len(paths))):
-            with self.client.get(path, catch_response=True, name="[static] asset") as r:
+        for path in assets:
+            with self.client.get(path, name="[static] asset", catch_response=True) as r:
                 if r.status_code in (200, 304, 404):
                     r.success()
 
-    @task(1)
-    def verificar_health(self):
-        """Endpoint de health — mede disponibilidade do servidor."""
-        with self.client.get(f"{BASE_PATH}/_stcore/health", name="[health] /health", catch_response=True) as r:
-            if r.status_code == 200:
+    @task(2)
+    def recarregar_pagina(self):
+        self._carregar_pagina()
+
+    def _carregar_pagina(self):
+        with self.client.get(
+            f"{BASE_PATH}/",
+            name="[página] carregar dashboard",
+            catch_response=True,
+        ) as r:
+            if r.status_code in (200, 301, 302):
                 r.success()
             else:
-                r.failure(f"Health retornou {r.status_code}")
+                r.failure(f"Página retornou {r.status_code}")
 
-    @task(1)
-    def carregar_stream(self):
-        """
-        Solicita o stream SSE do Streamlit — mede tempo para o
-        servidor iniciar a sessão e enviar os primeiros dados.
-        """
+
+class UsuarioDownload(HttpUser):
+    """
+    Usuário que baixa CSV e inspeciona dados.
+    Representa ~15% do tráfego — ações pesadas com pausa longa.
+    """
+    weight    = 2
+    wait_time = between(15, 40)
+
+    def on_start(self):
         with self.client.get(
-            f"{BASE_PATH}/stream",
+            f"{BASE_PATH}/",
+            name="[página] carregar dashboard",
+            catch_response=True,
+        ) as r:
+            if r.status_code in (200, 301, 302):
+                r.success()
+
+    @task(3)
+    def abrir_stream(self):
+        with self.client.get(
+            f"{BASE_PATH}/_stcore/stream",
             name="[stream] iniciar sessão",
             catch_response=True,
             stream=True,
@@ -106,94 +186,88 @@ class DashboardUser(HttpUser):
             else:
                 r.failure(f"Stream retornou {r.status_code}")
 
-    # ── Helpers internos ───────────────────────────────────────────────────
-    def _carregar_pagina(self):
+    @task(1)
+    def verificar_health(self):
         with self.client.get(
-            f"{BASE_PATH}/",
-            name="[página] carregar dashboard",
+            f"{BASE_PATH}/_stcore/health",
+            name="[health] /health",
             catch_response=True,
         ) as r:
             if r.status_code == 200:
                 r.success()
-            elif r.status_code in (301, 302):
-                r.success()
             else:
-                r.failure(f"Página retornou {r.status_code}")
-
-    def _conectar_websocket(self):
-        """
-        Abre uma conexão WebSocket com o Streamlit.
-        Streamlit usa WebSocket para toda comunicação de estado —
-        esta métrica mede tempo de handshake e latência do canal.
-        """
-        host = self.host.replace("http://", "ws://").replace("https://", "wss://")
-        ws_url = f"{host}{BASE_PATH}/_stcore/stream"
-
-        def _on_open(ws):
-            DashboardUser.ws_connected += 1
-
-        def _on_error(ws, error):
-            DashboardUser.ws_error_count += 1
-
-        def _on_close(ws, *args):
-            DashboardUser.ws_connected = max(0, DashboardUser.ws_connected - 1)
-
-        start = time.time()
-        try:
-            ws = websocket.WebSocketApp(
-                ws_url,
-                on_open=_on_open,
-                on_error=_on_error,
-                on_close=_on_close,
-            )
-            t = threading.Thread(
-                target=ws.run_forever,
-                kwargs={"ping_interval": 20, "ping_timeout": 10},
-                daemon=True,
-            )
-            t.start()
-            self._ws = ws
-            elapsed = int((time.time() - start) * 1000)
-            events.request.fire(
-                request_type="WS",
-                name="[ws] handshake Streamlit",
-                response_time=elapsed,
-                response_length=0,
-                exception=None,
-                context={},
-            )
-        except Exception as e:
-            elapsed = int((time.time() - start) * 1000)
-            events.request.fire(
-                request_type="WS",
-                name="[ws] handshake Streamlit",
-                response_time=elapsed,
-                response_length=0,
-                exception=e,
-                context={},
-            )
+                r.failure(f"Health retornou {r.status_code}")
 
 
-# ── Listeners de evento ────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
+#  SHAPE — Ramp-up progressivo → pico → sustentação → queda
+# ══════════════════════════════════════════════════════════════════════════════
+
+class RampUpShape(LoadTestShape):
+    """
+    Simula um dia de trabalho real:
+      0–1min   → sobe de 0 a 10 usuários  (chegada matinal)
+      1–2min   → sobe de 10 a 30          (horário de pico)
+      2–4min   → sustenta 30 usuários     (uso contínuo)
+      4–5min   → sobe para 50 usuários    (pico máximo — estresse)
+      5–6min   → sustenta 50              (teste de resistência)
+      6–7min   → cai para 20             (fim de expediente)
+      7–8min   → cai para 0              (sistema quieto)
+    """
+    stages = [
+        {"duration":  60, "users": 10,  "spawn_rate": 2},
+        {"duration": 120, "users": 30,  "spawn_rate": 4},
+        {"duration": 240, "users": 30,  "spawn_rate": 1},
+        {"duration": 300, "users": 50,  "spawn_rate": 5},
+        {"duration": 360, "users": 50,  "spawn_rate": 1},
+        {"duration": 420, "users": 20,  "spawn_rate": 5},
+        {"duration": 480, "users":  0,  "spawn_rate": 10},
+    ]
+
+    def tick(self):
+        run_time = self.get_run_time()
+        for stage in self.stages:
+            if run_time < stage["duration"]:
+                return stage["users"], stage["spawn_rate"]
+        return None
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  RELATÓRIO NO TERMINAL
+# ══════════════════════════════════════════════════════════════════════════════
+
 @events.test_start.add_listener
 def on_test_start(environment, **kwargs):
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("  TESTE DE CARGA — Dashboard TB | SINAN")
-    print(f"  Host: {environment.host}")
+    print(f"  Host:      {environment.host}")
     print(f"  Base path: {BASE_PATH}")
-    print("="*60 + "\n")
+    print("  Shape:     Ramp-up 0->10->30->50->20->0 usuarios (8 min)")
+    print("=" * 60 + "\n")
+
 
 @events.test_stop.add_listener
 def on_test_stop(environment, **kwargs):
-    stats = environment.stats
-    total = stats.total
-    print("\n" + "="*60)
+    t = environment.stats.total
+    p = lambda pct: t.get_response_time_percentile(pct) or 0  # noqa: E731
+    falhas_app = t.num_failures - sum(
+        e.occurrences for e in environment.stats.errors.values()
+        if "404" in str(e.error) and "health" in e.name
+    )
+    print("\n" + "=" * 60)
     print("  RESULTADO FINAL")
-    print(f"  Requisições:  {total.num_requests}")
-    print(f"  Falhas:       {total.num_failures} ({100*total.fail_ratio:.1f}%)")
-    print(f"  RPS médio:    {total.current_rps:.1f}")
-    print(f"  Latência p50: {total.get_response_time_percentile(0.5):.0f} ms")
-    print(f"  Latência p95: {total.get_response_time_percentile(0.95):.0f} ms")
-    print(f"  Latência p99: {total.get_response_time_percentile(0.99):.0f} ms")
-    print(f"  WS erros:     {DashboardUser.ws_error_count}")
-    print("="*60 + "\n")
+    print(f"  Requisições totais : {t.num_requests:,}")
+    print(f"  Falhas (app)       : {falhas_app:,} ({100*falhas_app/max(t.num_requests,1):.1f}%)")
+    print(f"  RPS médio          : {t.total_rps:.2f}")
+    print(f"  Latência p50       : {p(0.50):.0f} ms")
+    print(f"  Latência p75       : {p(0.75):.0f} ms")
+    print(f"  Latência p95       : {p(0.95):.0f} ms")
+    print(f"  Latência p99       : {p(0.99):.0f} ms")
+    print(f"  Latência máx       : {t.max_response_time:.0f} ms")
+    print("=" * 60)
+    print("  Arquivos gerados:")
+    print("    resultado_carga_stats.csv")
+    print("    resultado_carga_history.csv")
+    print("    resultado_carga_failures.csv")
+    print("    resultado_carga.html")
+    print("=" * 60 + "\n")

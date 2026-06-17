@@ -14,7 +14,7 @@ from pathlib import Path
 
 from src.constantes import (
     GEOJSON_PATH, HIST_MENSAL, HIST_ESTADUAL, HIST_ANUAL,
-    MUN_PARQUET, MUN_URL, UF_SIGLAS, COLUNAS_ANALISE,
+    MUN_PARQUET, MUN_URL, UF_SIGLAS,
     NORMALIZAR_DESFECHO,
 )
 
@@ -176,14 +176,26 @@ def load_municipios() -> pd.DataFrame:
         return pd.DataFrame(columns=["codigo_6", "nome", "latitude", "longitude"])
 
 
-def agregar_por_uf(df: pd.DataFrame, enc_norm: pd.Series | None = None) -> pd.DataFrame:
+def agregar_por_uf(df: pd.DataFrame, enc_norm: pd.Series | None = None,
+                   ano_sel: int | None = None) -> pd.DataFrame:
     """
-    Agrega casos, óbitos, incidência e mortalidade por UF.
+    Agrega casos, óbitos (fonte SIM quando ano_sel fornecido), incidência e mortalidade por UF.
     Retorna DataFrame com colunas: uf_sigla, casos, obitos, populacao, incidencia, mortalidade.
     """
     from src.constantes import POP_ESTADO
+    from src.banco import obitos_sim_por_uf
+
     casos_uf = df.groupby("uf_sigla", observed=True).size().reset_index(name="casos")
-    if enc_norm is not None:
+
+    # Mortalidade oficial: fonte SIM (Caderno de Indicadores MS)
+    if ano_sel is not None:
+        try:
+            sim_uf = obitos_sim_por_uf(ano_sel)
+            casos_uf = casos_uf.merge(sim_uf, on="uf_sigla", how="left")
+            casos_uf = casos_uf.rename(columns={"obitos_sim": "obitos"})
+        except Exception:
+            casos_uf["obitos"] = 0
+    elif enc_norm is not None:
         enc_s = enc_norm.copy()
         enc_s.index = df.index
         obitos_uf = (
@@ -193,6 +205,7 @@ def agregar_por_uf(df: pd.DataFrame, enc_norm: pd.Series | None = None) -> pd.Da
         casos_uf = casos_uf.merge(obitos_uf, on="uf_sigla", how="left")
     else:
         casos_uf["obitos"] = 0
+
     casos_uf["obitos"]      = casos_uf["obitos"].fillna(0).astype(int)
     casos_uf["populacao"]   = casos_uf["uf_sigla"].map(POP_ESTADO)
     casos_uf["incidencia"]  = (casos_uf["casos"]  / casos_uf["populacao"] * 100_000).round(1)
