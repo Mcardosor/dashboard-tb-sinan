@@ -1,0 +1,12 @@
+Method,Name,Error,Occurrences,First Seen,Last Seen
+GET,[stream] iniciar sessão,CatchResponseError('Stream retornou 0'),4,2026-06-17T18:43:39Z,2026-06-17T18:43:45Z
+GET,[aba] Navegar,"OSError(10065, '[WinError 10065] Uma operação de soquete foi tentada em um host inacessível.')",5,2026-06-17T18:43:45Z,2026-06-17T18:43:46Z
+GET,[static] asset,"ConnectionAbortedError(10053, '[WinError 10053] Uma conexão estabelecida foi anulada pelo software no computador host.')",4,2026-06-17T18:43:39Z,2026-06-17T18:43:39Z
+GET,[static] asset,"ConnectTimeoutError(<HTTPConnection(host='10.20.10.64', port=8502) at 0x26aa91896d0>, 'Connection to 10.20.10.64 timed out. (connect timeout=None)')",1,2026-06-17T18:44:00Z,2026-06-17T18:44:00Z
+GET,[static] asset,"ConnectTimeoutError(<HTTPConnection(host='10.20.10.64', port=8502) at 0x26aa9164d90>, 'Connection to 10.20.10.64 timed out. (connect timeout=None)')",1,2026-06-17T18:44:00Z,2026-06-17T18:44:00Z
+GET,[health] /health,CatchResponseError('Health retornou 0'),4,2026-06-17T18:43:39Z,2026-06-17T18:43:45Z
+GET,[aba] Navegar,"ConnectionAbortedError(10053, '[WinError 10053] Uma conexão estabelecida foi anulada pelo software no computador host.')",6,2026-06-17T18:43:39Z,2026-06-17T18:43:39Z
+GET,[health] /health,CatchResponseError('Health retornou 404'),22,2026-06-17T18:43:55Z,2026-06-17T18:45:01Z
+GET,[static] asset,"ConnectTimeoutError(<HTTPConnection(host='10.20.10.64', port=8502) at 0x26aa91d54d0>, 'Connection to 10.20.10.64 timed out. (connect timeout=None)')",1,2026-06-17T18:44:00Z,2026-06-17T18:44:00Z
+GET,[static] asset,"ConnectTimeoutError(<HTTPConnection(host='10.20.10.64', port=8502) at 0x26aa918afd0>, 'Connection to 10.20.10.64 timed out. (connect timeout=None)')",1,2026-06-17T18:44:00Z,2026-06-17T18:44:00Z
+GET,[página] carregar dashboard,CatchResponseError('Página retornou 0'),28,2026-06-17T18:43:26Z,2026-06-17T18:43:46Z
