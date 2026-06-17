@@ -1,4 +1,4 @@
-"""
+﻿"""
 graficos.py
 ───────────
 Uma função por gráfico Plotly. Cada função recebe um DataFrame
@@ -60,7 +60,7 @@ def safe_pie(df_plot: pd.DataFrame, names: str, values: str,
             orientation="h",
             x=0.5, xanchor="center",
             y=-0.18, yanchor="top",
-            font=dict(color="#c9d1d9", size=11),
+            font=dict(color="#57606a", size=11),
             bgcolor="rgba(0,0,0,0)",
         ),
         margin={"t": 20, "r": 10, "l": 10, "b": 80},
@@ -68,11 +68,11 @@ def safe_pie(df_plot: pd.DataFrame, names: str, values: str,
         uniformtext_mode="hide",
     )
     fig.update_traces(
-        textfont_color="#f0f6fc", textfont_size=11,
+        textfont_color="white", textfont_size=11,
         # Mostra % apenas dentro de fatias com mais de 6% — oculta fatias pequenas
         textinfo="percent",
         insidetextorientation="horizontal",
-        marker=dict(line=dict(color="#0d1117", width=2)),
+        marker=dict(line=dict(color="rgba(255,255,255,0.4)", width=2)),
         hovertemplate="<b>%{label}</b><br>Casos: %{value:,}<br>"
                       "Participação: %{percent}<extra></extra>",
         texttemplate="%{percent:.1%}",
@@ -82,7 +82,7 @@ def safe_pie(df_plot: pd.DataFrame, names: str, values: str,
         text=["" if (v / total_val) < 0.06 else f"{v/total_val:.1%}"
               for v in df_plot[values]]
     ))
-    st.plotly_chart(fig, use_container_width=True,
+    st.plotly_chart(fig, width='stretch',
                     config={"displayModeBar": False, "scrollZoom": False})
 
 
@@ -101,9 +101,9 @@ def safe_bar_h(df_plot: pd.DataFrame, x: str, y: str,
                       xaxis=dict(title=label_x), yaxis=dict(title=""))
     fig.update_traces(
         hovertemplate=f"<b>%{{y}}</b><br>{label_x}: %{{x:,}}<extra></extra>",
-        marker_line_color="#0d1117", marker_line_width=1,
+        marker_line_color="rgba(255,255,255,0.4)", marker_line_width=1,
     )
-    st.plotly_chart(fig, use_container_width=True, config={"scrollZoom": False})
+    st.plotly_chart(fig, width='stretch', config={"scrollZoom": False, "displayModeBar": False})
 
 
 def safe_bar_v(df_plot: pd.DataFrame, x: str, y: str,
@@ -120,9 +120,9 @@ def safe_bar_v(df_plot: pd.DataFrame, x: str, y: str,
                       xaxis=dict(title="", tickangle=-30), yaxis=dict(title=label_y))
     fig.update_traces(
         hovertemplate=f"<b>%{{x}}</b><br>{label_y}: %{{y:,}}<extra></extra>",
-        marker_line_color="#0d1117", marker_line_width=1,
+        marker_line_color="rgba(255,255,255,0.4)", marker_line_width=1,
     )
-    st.plotly_chart(fig, use_container_width=True, config={"scrollZoom": False})
+    st.plotly_chart(fig, width='stretch', config={"scrollZoom": False, "displayModeBar": False})
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -158,8 +158,10 @@ def fig_mapa(df: pd.DataFrame, geojson: dict) -> go.Figure:
 
 
 def fig_piramide(df: pd.DataFrame) -> go.Figure:
-    bins   = [0, 10, 20, 30, 40, 50, 60, 70, 200]
-    labels = ["0-9", "10-19", "20-29", "30-39", "40-49", "50-59", "60-69", "70+"]
+    bins   = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 200]
+    labels = ["0-4", "5-9", "10-14", "15-19", "20-24", "25-29", "30-34",
+              "35-39", "40-44", "45-49", "50-54", "55-59", "60-64",
+              "65-69", "70-74", "75-79", "80+"]
     df_p = df[df["sexo"].isin(["Masculino", "Feminino"])].copy()
     df_p["faixa"] = pd.cut(
         df_p["idade_anos"].astype("Int64"), bins=bins, labels=labels, right=False
@@ -170,28 +172,36 @@ def fig_piramide(df: pd.DataFrame) -> go.Figure:
     )
     fig = go.Figure()
     for sexo, cor in [("Masculino", "#58a6ff"), ("Feminino", "#f778ba")]:
-        d = pir[pir["sexo"] == sexo]
+        d = pir[pir["sexo"] == sexo].copy()
         fig.add_trace(go.Bar(
             name=sexo, y=d["faixa"].astype(str), x=d["valor"],
             orientation="h", marker_color=cor,
             text=d["casos"].apply(lambda v: f"{v:,}"),
             textposition="inside", insidetextanchor="middle",
-            textfont=dict(color="white", size=11),
+            textfont=dict(color="white", size=10),
             hovertemplate=(
                 "<b>Faixa: %{y}</b><br>" + sexo +
                 ": <b>%{customdata:,}</b> casos<extra></extra>"
             ),
             customdata=d["casos"],
+            marker_line_color="rgba(255,255,255,0.3)", marker_line_width=1,
         ))
+    # Linha pontilhada marcando o limite <15 anos (entre 10-14 e 15-19)
+    fig.add_hline(
+        y=2.5,  # posição entre index 2 (10-14) e 3 (15-19) no eixo categórico
+        line_dash="dot", line_color="#f0883e", line_width=1.5,
+        annotation_text="← <15 anos (prioritário)",
+        annotation_position="right",
+        annotation_font=dict(color="#f0883e", size=10),
+    )
     fig.update_layout(
         barmode="relative",
-        xaxis=dict(tickvals=[-15000, -10000, -5000, 0, 5000, 10000],
-                   ticktext=["15k", "10k", "5k", "0", "5k", "10k"],
-                   title="Numero de casos", gridcolor="rgba(255,255,255,0.08)"),
-        yaxis=dict(title="Faixa etaria", gridcolor="rgba(255,255,255,0.08)"),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0.5, xanchor="center"),
-        hoverlabel=HOVER_LABEL, margin=dict(l=20, r=20, t=30, b=20),
-        height=420, **BG,
+        xaxis=dict(title="Número de casos", gridcolor="rgba(0,0,0,0.07)"),
+        yaxis=dict(title="Faixa etária", gridcolor="rgba(0,0,0,0.07)"),
+        legend=dict(orientation="h", yanchor="top", y=-0.13, x=0.5, xanchor="center",
+                    font=dict(size=12), bgcolor="rgba(0,0,0,0)"),
+        hoverlabel=HOVER_LABEL, margin=dict(l=20, r=80, t=10, b=80),
+        height=560, **BG,
     )
     return fig
 
@@ -218,10 +228,10 @@ def fig_desfechos(df: pd.DataFrame) -> go.Figure:
         textposition="auto", insidetextanchor="middle",
         textfont=dict(color="white", size=12),
         hovertemplate="<b>%{y}</b><br>%{x:,} casos<br>%{customdata[0]}% do total<extra></extra>",
-        marker_line_color="#0d1117", marker_line_width=1,
+        marker_line_color="rgba(255,255,255,0.4)", marker_line_width=1,
     )
     fig.update_layout(showlegend=False,
-                      xaxis=dict(title="Numero de casos", gridcolor="rgba(255,255,255,0.08)"),
+                      xaxis=dict(title="Numero de casos", gridcolor="rgba(0,0,0,0.07)"),
                       hoverlabel=HOVER_LABEL, margin=dict(l=10, r=20, t=10, b=20),
                       height=420, **BG)
     return fig
@@ -245,7 +255,7 @@ def fig_raca_cor(df: pd.DataFrame) -> go.Figure | None:
         textfont=dict(color="white", size=12), marker_line_width=0,
         hovertemplate="<b>%{y}</b><br>%{x:,} casos<br>%{customdata[0]}% do total<extra></extra>",
     )
-    fig.update_layout(showlegend=False, xaxis=dict(gridcolor="rgba(255,255,255,0.08)"),
+    fig.update_layout(showlegend=False, xaxis=dict(gridcolor="rgba(0,0,0,0.07)"),
                       hoverlabel=HOVER_LABEL, margin=dict(l=10, r=20, t=10, b=20),
                       height=340, **BG)
     return fig
@@ -269,7 +279,7 @@ def fig_forma_clinica(df: pd.DataFrame) -> go.Figure | None:
         textfont=dict(color="white", size=12), marker_line_width=0,
         hovertemplate="<b>%{y}</b><br>%{x:,} casos<br>%{customdata[0]}% do total<extra></extra>",
     )
-    fig.update_layout(showlegend=False, xaxis=dict(gridcolor="rgba(255,255,255,0.08)"),
+    fig.update_layout(showlegend=False, xaxis=dict(gridcolor="rgba(0,0,0,0.07)"),
                       hoverlabel=HOVER_LABEL, margin=dict(l=10, r=20, t=10, b=20),
                       height=340, **BG)
     return fig
@@ -302,7 +312,7 @@ def _barras_percentual(df, mapeamento, escala_cores, height):
     fig.update_layout(
         xaxis=dict(title="% dos casos", ticksuffix="%",
                    range=[0, df_d["percentual"].max() * 1.35],
-                   gridcolor="rgba(255,255,255,0.08)"),
+                   gridcolor="rgba(0,0,0,0.07)"),
         hoverlabel=HOVER_LABEL, yaxis_title="",
         margin=dict(l=10, r=20, t=10, b=30), height=height, **BG,
     )
@@ -341,13 +351,13 @@ def fig_coinfeccao_hiv_uf(df: pd.DataFrame) -> None:
     fig.update_traces(
         marker_color="#da3633",
         texttemplate="%{text:.1f}%", textposition="outside",
-        textfont=dict(color="#c9d1d9", size=11),
+        textfont=dict(color="#57606a", size=11),
         hovertemplate="<b>%{y}</b><br>Coinfecção HIV: %{x:.1f}%<extra></extra>",
-        marker_line_color="#0d1117", marker_line_width=1,
+        marker_line_color="rgba(255,255,255,0.4)", marker_line_width=1,
     )
     fig.update_layout(showlegend=False,
                       xaxis=dict(title="% coinfecção HIV"), yaxis=dict(title=""))
-    st.plotly_chart(fig, use_container_width=True, config={"scrollZoom": False})
+    st.plotly_chart(fig, width='stretch', config={"scrollZoom": False, "displayModeBar": False})
 
 
 def fig_comorbidades(df: pd.DataFrame, total: int) -> None:
@@ -384,12 +394,12 @@ def fig_comorbidades(df: pd.DataFrame, total: int) -> None:
     tb_layout(fig, altura=360)
     fig.update_traces(
         texttemplate="%{text:.1f}%", textposition="outside",
-        textfont=dict(color="#c9d1d9", size=11),
+        textfont=dict(color="#57606a", size=11),
         hovertemplate="<b>%{y}</b><br>Casos: %{x:,}<br>Participação: %{text:.1f}%<extra></extra>",
-        marker_line_color="#0d1117", marker_line_width=1,
+        marker_line_color="rgba(255,255,255,0.4)", marker_line_width=1,
     )
     fig.update_layout(showlegend=False, xaxis=dict(title="Nº de casos"), yaxis=dict(title=""))
-    st.plotly_chart(fig, use_container_width=True, config={"scrollZoom": False})
+    st.plotly_chart(fig, width='stretch', config={"scrollZoom": False, "displayModeBar": False})
 
 
 def fig_comorbidades_uf(df: pd.DataFrame) -> None:
@@ -429,8 +439,8 @@ def fig_comorbidades_uf(df: pd.DataFrame) -> None:
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, title=""),
         bargap=0.15, bargroupgap=0.05,
     )
-    fig.update_traces(marker_line_color="#0d1117", marker_line_width=1)
-    st.plotly_chart(fig, use_container_width=True, config={"scrollZoom": False})
+    fig.update_traces(marker_line_color="rgba(255,255,255,0.4)", marker_line_width=1)
+    st.plotly_chart(fig, width='stretch', config={"scrollZoom": False, "displayModeBar": False})
 
 
 def fig_tendencia_mensal(df_filtrado: pd.DataFrame, df_hist: dict,
@@ -469,7 +479,7 @@ def fig_tendencia_mensal(df_filtrado: pd.DataFrame, df_hist: dict,
     )
 
     COR_MAIS = "#da3633"; COR_MENOS = "#3fb950"; COR_ESTAVEL = "#d29922"
-    COR_INC  = "#6e7681"; COR_HIST  = "#58a6ff"
+    COR_INC  = "#8a9aaa"; COR_HIST  = "#2B7BB9"
     cores_barras = [
         COR_INC if (mes_incompleto_num and int(r["mes_num"]) == mes_incompleto_num) else
         COR_MAIS if r["direcao"] == "Para Mais" else
@@ -481,14 +491,14 @@ def fig_tendencia_mensal(df_filtrado: pd.DataFrame, df_hist: dict,
     fig.add_trace(go.Bar(
         x=tabela["mes_label"], y=tabela[f"casos_{ano_sel}"],
         marker_color=cores_barras, name=f"Casos {ano_sel}",
-        marker_line_color="#0d1117", marker_line_width=1,
+        marker_line_color="rgba(255,255,255,0.4)", marker_line_width=1,
         hovertemplate=f"<b>%{{x}} — {ano_sel}</b><br>Casos: %{{y:,}}<extra></extra>",
     ))
     fig.add_trace(go.Scatter(
         x=tabela["mes_label"], y=tabela["media_hist"],
         mode="lines+markers", name=f"Média {anos_hist[0]}–{anos_hist[-1]}",
         line=dict(color=COR_HIST, width=2.5, dash="dot"),
-        marker=dict(size=7, color=COR_HIST, line=dict(color="#0d1117", width=1)),
+        marker=dict(size=7, color=COR_HIST, line=dict(color="rgba(255,255,255,0.4)", width=1)),
         hovertemplate="<b>%{x} — Média histórica</b><br>%{y:,.0f} casos<extra></extra>",
     ))
     if mes_incompleto_num is not None:
@@ -497,7 +507,7 @@ def fig_tendencia_mensal(df_filtrado: pd.DataFrame, df_hist: dict,
             fig.add_annotation(
                 x=mes_inc.iloc[0]["mes_label"], y=mes_inc.iloc[0][f"casos_{ano_sel}"],
                 text="mês incompleto", showarrow=True, arrowhead=2,
-                font=dict(color="#8b949e", size=10), arrowcolor="#8b949e", ay=-30,
+                font=dict(color="#57606a", size=10), arrowcolor="#57606a", ay=-30,
             )
     tb_layout(fig, altura=H_LARGE)
     fig.update_layout(
@@ -505,7 +515,7 @@ def fig_tendencia_mensal(df_filtrado: pd.DataFrame, df_hist: dict,
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, title=""),
         bargap=0.3,
     )
-    st.plotly_chart(fig, use_container_width=True, config={"scrollZoom": False})
+    st.plotly_chart(fig, width='stretch', config={"scrollZoom": False, "displayModeBar": False})
     st.caption("🔴 Para Mais  |  🟢 Para Menos  |  🟡 Estável  |  ⬜ Mês incompleto"
                f"  |  Linha azul = média {anos_hist[0]}–{anos_hist[-1]}")
 
@@ -514,20 +524,20 @@ def fig_tendencia_anual(df_hist: dict, ano_sel: int) -> None:
     """Evolução anual de casos."""
     anual = df_hist["anual"].sort_values("nu_ano")
     anual["cor"] = anual["nu_ano"].apply(
-        lambda a: "#da3633" if str(a) == str(ano_sel) else "#58a6ff"
+        lambda a: "#da3633" if str(a) == str(ano_sel) else "#2B7BB9"
     )
     fig = go.Figure(go.Bar(
         x=anual["nu_ano"], y=anual["casos"],
         marker_color=anual["cor"],
-        marker_line_color="#0d1117", marker_line_width=1,
+        marker_line_color="rgba(255,255,255,0.4)", marker_line_width=1,
         text=anual["casos"].apply(lambda v: f"{v:,}".replace(",", ".")),
-        textposition="outside", textfont=dict(color="#c9d1d9", size=11),
+        textposition="outside", textfont=dict(color="#57606a", size=11),
         hovertemplate="<b>Ano %{x}</b><br>Total: %{y:,} casos<extra></extra>",
     ))
     tb_layout(fig, altura=350)
     fig.update_layout(xaxis=dict(title="Ano"), yaxis=dict(title="Total de casos"),
                       showlegend=False)
-    st.plotly_chart(fig, use_container_width=True, config={"scrollZoom": False})
+    st.plotly_chart(fig, width='stretch', config={"scrollZoom": False, "displayModeBar": False})
 
 
 def fig_tendencia_uf(df_filtrado: pd.DataFrame, df_hist: dict,
@@ -556,21 +566,21 @@ def fig_tendencia_uf(df_filtrado: pd.DataFrame, df_hist: dict,
                  text="variacao")
     fig.update_traces(
         texttemplate="%{text:+.1f}%", textposition="outside",
-        textfont=dict(color="#c9d1d9", size=10),
+        textfont=dict(color="#57606a", size=10),
         hovertemplate=(f"<b>%{{y}}</b><br>{ano_sel}: %{{customdata[0]:,}} casos<br>"
                        "Média histórica: %{{customdata[1]:,.0f}}<br>"
                        "Variação: %{{x:+.1f}}%<extra></extra>"),
         customdata=uf_comp[[f"casos_{ano_sel}", "media_hist_uf"]].values,
-        marker_line_color="#0d1117", marker_line_width=1,
+        marker_line_color="rgba(255,255,255,0.4)", marker_line_width=1,
     )
-    fig.add_vline(x=0, line_color="#58a6ff", line_width=1.5, line_dash="dot")
+    fig.add_vline(x=0, line_color="#2B7BB9", line_width=1.5, line_dash="dot")
     tb_layout(fig, altura=620)
     fig.update_layout(
         xaxis=dict(title=f"Variação % vs média {anos_hist[0]}–{anos_hist[-1]}", zeroline=False),
         yaxis=dict(title=""),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, title=""),
     )
-    st.plotly_chart(fig, use_container_width=True, config={"scrollZoom": False})
+    st.plotly_chart(fig, width='stretch', config={"scrollZoom": False, "displayModeBar": False})
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -578,7 +588,7 @@ def fig_tendencia_uf(df_filtrado: pd.DataFrame, df_hist: dict,
 # ══════════════════════════════════════════════════════════════════════════════
 
 def fig_piramide_obitos(df: pd.DataFrame) -> go.Figure | None:
-    """Pirâmide etária dos ÓBITOS por TB (Raquel ponto 5)."""
+    """Pirâmide etária dos ÓBITOS por TB — mesmos bins e paleta da pirâmide de casos."""
     col_enc = "situacao_enc_norm" if "situacao_enc_norm" in df.columns else "situacao_encerramento"
     if col_enc not in df.columns or "idade_anos" not in df.columns or "sexo" not in df.columns:
         return None
@@ -587,40 +597,46 @@ def fig_piramide_obitos(df: pd.DataFrame) -> go.Figure | None:
     if df_ob.empty:
         return None
 
-    bins   = [0, 15, 25, 35, 45, 55, 65, 200]
-    labels = ["0-14", "15-24", "25-34", "35-44", "45-54", "55-64", "65+"]
-    df_ob["faixa"] = pd.cut(
-        df_ob["idade_anos"].astype("Int64"), bins=bins, labels=labels, right=False
-    )
+    bins   = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 200]
+    labels = ["0-4", "5-9", "10-14", "15-19", "20-24", "25-29", "30-34",
+              "35-39", "40-44", "45-49", "50-54", "55-59", "60-64",
+              "65-69", "70-74", "75-79", "80+"]
+    df_ob["faixa"] = pd.cut(df_ob["idade_anos"].astype("Int64"), bins=bins, labels=labels, right=False)
     df_ob = df_ob[df_ob["sexo"].isin(["Masculino", "Feminino"])]
     pir = df_ob.groupby(["faixa", "sexo"], observed=True).size().reset_index(name="casos")
-    pir["valor"] = pir.apply(
-        lambda r: -r["casos"] if r["sexo"] == "Masculino" else r["casos"], axis=1
-    )
+    pir["valor"] = pir.apply(lambda r: -r["casos"] if r["sexo"] == "Masculino" else r["casos"], axis=1)
 
     fig = go.Figure()
     for sexo, cor in [("Masculino", "#58a6ff"), ("Feminino", "#f778ba")]:
-        d = pir[pir["sexo"] == sexo]
+        d = pir[pir["sexo"] == sexo].copy()
         fig.add_trace(go.Bar(
             name=sexo, y=d["faixa"].astype(str), x=d["valor"],
             orientation="h", marker_color=cor,
             text=d["casos"].apply(lambda v: f"{v:,}"),
             textposition="inside", insidetextanchor="middle",
-            textfont=dict(color="white", size=11),
+            textfont=dict(color="white", size=10),
             hovertemplate=(
                 "<b>Faixa: %{y}</b><br>" + sexo +
                 ": <b>%{customdata:,}</b> óbitos<extra></extra>"
             ),
             customdata=d["casos"],
+            marker_line_color="rgba(255,255,255,0.3)", marker_line_width=1,
         ))
+    fig.add_hline(
+        y=2.5,
+        line_dash="dot", line_color="#f0883e", line_width=1.5,
+        annotation_text="← <15 anos (prioritário)",
+        annotation_position="right",
+        annotation_font=dict(color="#f0883e", size=10),
+    )
     fig.update_layout(
         barmode="relative",
-        xaxis=dict(title="Número de óbitos por TB",
-                   gridcolor="rgba(255,255,255,0.08)"),
-        yaxis=dict(title="Faixa etária", gridcolor="rgba(255,255,255,0.08)"),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0.5, xanchor="center"),
-        hoverlabel=HOVER_LABEL, margin=dict(l=20, r=20, t=30, b=20),
-        height=400, **BG,
+        xaxis=dict(title="Número de óbitos por TB", gridcolor="rgba(0,0,0,0.07)"),
+        yaxis=dict(title="Faixa etária", gridcolor="rgba(0,0,0,0.07)"),
+        legend=dict(orientation="h", yanchor="top", y=-0.13, x=0.5, xanchor="center",
+                    font=dict(size=12), bgcolor="rgba(0,0,0,0)"),
+        hoverlabel=HOVER_LABEL, margin=dict(l=20, r=80, t=10, b=80),
+        height=560, **BG,
     )
     return fig
 
@@ -694,7 +710,7 @@ def fig_desfecho_por_hiv(df: pd.DataFrame) -> None:
         insidetextanchor="middle",
         textfont=dict(color="white", size=10),
         hovertemplate="<b>HIV %{x}</b><br>%{data.name}: %{y:.1f}%<extra></extra>",
-        marker_line_color="#0d1117", marker_line_width=1,
+        marker_line_color="rgba(255,255,255,0.4)", marker_line_width=1,
     )
     fig.update_layout(
         xaxis=dict(title="Status HIV"),
@@ -703,7 +719,198 @@ def fig_desfecho_por_hiv(df: pd.DataFrame) -> None:
                     title="Desfecho", font=dict(size=11)),
         uniformtext_minsize=8, uniformtext_mode="hide",
     )
-    st.plotly_chart(fig, use_container_width=True, config={"scrollZoom": False})
+    st.plotly_chart(fig, width='stretch', config={"scrollZoom": False, "displayModeBar": False})
+
+
+def fig_desfecho_agrupado(df: pd.DataFrame) -> None:
+    """Desfecho do tratamento agrupado em 4 categorias epidemiológicas."""
+    col = "situacao_enc_norm" if "situacao_enc_norm" in df.columns else "situacao_encerramento"
+    if col not in df.columns:
+        grafico_vazio()
+        return
+
+    GRUPOS = {
+        "Cura":               ["Cura"],
+        "Interrupção":        ["Abandono", "Abandono Primario"],
+        "Óbito":              ["Obito por TB", "Obito por outras causas"],
+        "Não avaliados":      ["Transferencia", "Mudanca de Esquema", "Falencia",
+                               "TB-DR", "Em acompanhamento"],
+    }
+    COR_GRUPOS = {
+        "Cura":          "#2ea043",
+        "Interrupção":   "#d29922",
+        "Óbito":         "#da3633",
+        "Não avaliados": "#8b949e",
+    }
+
+    enc = df[col].astype(str).map(lambda x: NORMALIZAR_DESFECHO.get(x, x))
+    dados = []
+    total_val = 0
+    for grupo, valores in GRUPOS.items():
+        n = enc.isin(valores).sum()
+        dados.append({"grupo": grupo, "casos": int(n)})
+        total_val += n
+
+    df_d = pd.DataFrame(dados)
+    df_d["pct"] = (df_d["casos"] / total_val * 100).round(1) if total_val else 0
+
+    fig = px.bar(df_d, x="grupo", y="casos", color="grupo",
+                 color_discrete_map=COR_GRUPOS,
+                 labels={"grupo": "", "casos": "Nº de casos"},
+                 text="pct")
+    tb_layout(fig, altura=H_MEDIUM)
+    fig.update_traces(
+        texttemplate="%{text:.1f}%", textposition="outside",
+        textfont=dict(color="#57606a", size=12),
+        hovertemplate="<b>%{x}</b><br>Casos: %{y:,}<br>Participação: %{text:.1f}%<extra></extra>",
+        marker_line_color="rgba(255,255,255,0.4)", marker_line_width=1,
+    )
+    fig.update_layout(showlegend=False, xaxis=dict(title=""), yaxis=dict(title="Nº de casos"))
+    st.plotly_chart(fig, width='stretch', config={"scrollZoom": False, "displayModeBar": False})
+
+
+def fig_desfecho_por_raca(df: pd.DataFrame) -> None:
+    """Desfecho de tratamento (agrupado) × Raça/cor — barras empilhadas 100%."""
+    col_enc  = "situacao_enc_norm" if "situacao_enc_norm" in df.columns else "situacao_encerramento"
+    col_raca = "raca_cor"
+    if col_enc not in df.columns or col_raca not in df.columns:
+        grafico_vazio()
+        return
+
+    GRUPOS = {
+        "Cura":          ["Cura"],
+        "Interrupção":   ["Abandono", "Abandono Primario"],
+        "Óbito":         ["Obito por TB", "Obito por outras causas"],
+        "Não avaliados": ["Transferencia", "Mudanca de Esquema", "Falencia",
+                          "TB-DR", "Em acompanhamento"],
+    }
+    COR_GRUPOS = {
+        "Cura":          "#2ea043",
+        "Interrupção":   "#d29922",
+        "Óbito":         "#da3633",
+        "Não avaliados": "#8b949e",
+    }
+    RACAS_VALIDAS = ["Branca", "Preta", "Parda", "Amarela", "Indígena", "Indigena"]
+
+    df_p = df[[col_enc, col_raca]].copy()
+    df_p[col_enc]  = df_p[col_enc].astype(str).map(lambda x: NORMALIZAR_DESFECHO.get(x, x))
+    df_p[col_raca] = df_p[col_raca].astype(str)
+    df_p = df_p[df_p[col_raca].isin(RACAS_VALIDAS)]
+
+    def mapear_grupo(enc):
+        for grupo, vals in GRUPOS.items():
+            if enc in vals:
+                return grupo
+        return None
+
+    df_p["grupo"] = df_p[col_enc].map(mapear_grupo)
+    df_p = df_p.dropna(subset=["grupo"])
+    if df_p.empty:
+        grafico_vazio()
+        return
+
+    ct = df_p.groupby([col_raca, "grupo"]).size().reset_index(name="n")
+    total_raca = ct.groupby(col_raca)["n"].sum().reset_index(name="total")
+    ct = ct.merge(total_raca, on=col_raca)
+    ct["pct"] = (ct["n"] / ct["total"] * 100).round(1)
+    ct[col_raca] = ct[col_raca].replace({"Indigena": "Indígena"})
+
+    fig = px.bar(ct, x=col_raca, y="pct", color="grupo",
+                 color_discrete_map=COR_GRUPOS,
+                 barmode="stack",
+                 labels={col_raca: "Raça/Cor", "pct": "% dos casos", "grupo": "Desfecho"},
+                 text="pct")
+    tb_layout(fig, altura=H_LARGE)
+    fig.update_traces(
+        texttemplate="%{text:.0f}%", textposition="inside",
+        insidetextanchor="middle", textfont=dict(color="white", size=10),
+        hovertemplate="<b>%{x}</b><br>%{data.name}: %{y:.1f}%<extra></extra>",
+        marker_line_color="rgba(255,255,255,0.4)", marker_line_width=1,
+    )
+    fig.update_layout(
+        xaxis=dict(title="Raça/Cor"),
+        yaxis=dict(title="% dos pacientes", ticksuffix="%"),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5, title=""),
+        uniformtext_minsize=8, uniformtext_mode="hide",
+    )
+    st.plotly_chart(fig, width='stretch', config={"scrollZoom": False, "displayModeBar": False})
+
+
+def fig_desfecho_por_vulneravel(df: pd.DataFrame) -> None:
+    """Desfecho de tratamento (agrupado) × Populações vulneráveis."""
+    col_enc = "situacao_enc_norm" if "situacao_enc_norm" in df.columns else "situacao_encerramento"
+    if col_enc not in df.columns:
+        grafico_vazio()
+        return
+
+    GRUPOS = {
+        "Cura":          ["Cura"],
+        "Interrupção":   ["Abandono", "Abandono Primario"],
+        "Óbito":         ["Obito por TB", "Obito por outras causas"],
+        "Não avaliados": ["Transferencia", "Mudanca de Esquema", "Falencia",
+                          "TB-DR", "Em acompanhamento"],
+    }
+    COR_GRUPOS = {
+        "Cura":          "#2ea043",
+        "Interrupção":   "#d29922",
+        "Óbito":         "#da3633",
+        "Não avaliados": "#8b949e",
+    }
+    POPS = {
+        "populacao_privada_liberdade": "Privado de Liberdade",
+        "populacao_situacao_rua":      "Em Situação de Rua",
+        "profissional_saude":          "Prof. de Saúde",
+        "populacao_imigrante":         "Imigrante",
+    }
+
+    enc = df[col_enc].astype(str).map(lambda x: NORMALIZAR_DESFECHO.get(x, x))
+
+    def mapear_grupo(e):
+        for g, vs in GRUPOS.items():
+            if e in vs:
+                return g
+        return None
+
+    rows = []
+    for col, label in POPS.items():
+        if col not in df.columns:
+            continue
+        mask = df[col].astype(str).str.lower() == "sim"
+        if mask.sum() == 0:
+            continue
+        sub_enc = enc[mask]
+        for grupo in GRUPOS:
+            n = (sub_enc.map(mapear_grupo) == grupo).sum()
+            rows.append({"populacao": label, "grupo": grupo, "n": int(n)})
+
+    if not rows:
+        grafico_vazio()
+        return
+
+    ct = pd.DataFrame(rows)
+    total_pop = ct.groupby("populacao")["n"].sum().reset_index(name="total")
+    ct = ct.merge(total_pop, on="populacao")
+    ct["pct"] = (ct["n"] / ct["total"] * 100).round(1)
+
+    fig = px.bar(ct, x="populacao", y="pct", color="grupo",
+                 color_discrete_map=COR_GRUPOS,
+                 barmode="stack",
+                 labels={"populacao": "População", "pct": "% dos casos", "grupo": "Desfecho"},
+                 text="pct")
+    tb_layout(fig, altura=H_LARGE)
+    fig.update_traces(
+        texttemplate="%{text:.0f}%", textposition="inside",
+        insidetextanchor="middle", textfont=dict(color="white", size=10),
+        hovertemplate="<b>%{x}</b><br>%{data.name}: %{y:.1f}%<extra></extra>",
+        marker_line_color="rgba(255,255,255,0.4)", marker_line_width=1,
+    )
+    fig.update_layout(
+        xaxis=dict(title=""),
+        yaxis=dict(title="% dos pacientes", ticksuffix="%"),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5, title=""),
+        uniformtext_minsize=8, uniformtext_mode="hide",
+    )
+    st.plotly_chart(fig, width='stretch', config={"scrollZoom": False, "displayModeBar": False})
 
 
 def fig_indicadores_historicos(df_ind: pd.DataFrame, sel_ind: list[str],
@@ -714,28 +921,32 @@ def fig_indicadores_historicos(df_ind: pd.DataFrame, sel_ind: list[str],
     pct_novo, pct_pulm, pct_aids, pct_alcool, pct_tdo.
     """
     opcoes_col = {
-        "Coeficiente de incidência (por 100 mil)": "incidencia_100k",
-        "Coeficiente de mortalidade (por 100 mil)": "mortalidade_100k",
-        "Taxa de cura (%)":           "pct_cura",
-        "Taxa de abandono (%)":       "pct_abandon",
-        "Coinfecção HIV (%)":         "pct_hiv",
-        "Forma pulmonar (%)":         "pct_pulm",
-        "Testagem para HIV (%)":      "pct_test_hiv",
-        "TDO (%)":                    "pct_tdo",
-        "Óbito por TB (%)":           "pct_obito",
-        "Casos novos (%)":            "pct_novo",
+        "Coeficiente de incidência (por 100 mil)":   "incidencia_100k",
+        "Coeficiente de mortalidade (por 100 mil)":  "mortalidade_100k",
+        "Taxa de cura (%)":                          "pct_cura",
+        "Taxa de abandono (%)":                      "pct_abandon",
+        "Coinfecção HIV (%)":                        "pct_hiv",
+        "Forma pulmonar (%)":                        "pct_pulm",
+        "Testagem para HIV (%)":                     "pct_test_hiv",
+        "TDO (%)":                                   "pct_tdo",
+        "Óbito por TB (%)":                          "pct_obito",
+        "Casos novos (%)":                           "pct_novo",
+        "TB pulmonar conf. laboratorial (%)":        "pct_pulm_conf_lab",
+        "Contatos examinados (%)":                   "pct_contatos_exam",
     }
     cor_indicador = {
-        "Coeficiente de incidência (por 100 mil)":  "#58a6ff",
-        "Coeficiente de mortalidade (por 100 mil)": "#f85149",
-        "Taxa de cura (%)":           "#3fb950",
-        "Taxa de abandono (%)":       "#d29922",
-        "Coinfecção HIV (%)":         "#da3633",
-        "Forma pulmonar (%)":         "#79c0ff",
-        "Testagem para HIV (%)":      "#a371f7",
-        "TDO (%)":                    "#f0b342",
-        "Óbito por TB (%)":           "#bb0000",
-        "Casos novos (%)":            "#7ee787",
+        "Coeficiente de incidência (por 100 mil)":   "#2B7BB9",
+        "Coeficiente de mortalidade (por 100 mil)":  "#f85149",
+        "Taxa de cura (%)":                          "#3fb950",
+        "Taxa de abandono (%)":                      "#d29922",
+        "Coinfecção HIV (%)":                        "#da3633",
+        "Forma pulmonar (%)":                        "#79c0ff",
+        "Testagem para HIV (%)":                     "#a371f7",
+        "TDO (%)":                                   "#f0b342",
+        "Óbito por TB (%)":                          "#bb0000",
+        "Casos novos (%)":                           "#2ea043",
+        "TB pulmonar conf. laboratorial (%)":        "#E07B54",
+        "Contatos examinados (%)":                   "#d2a8ff",
     }
 
     cols_disp = [c for c in sel_ind if opcoes_col.get(c) in df_ind.columns]
@@ -753,8 +964,8 @@ def fig_indicadores_historicos(df_ind: pd.DataFrame, sel_ind: list[str],
             y=df_ind_sorted[col],
             mode="lines+markers",
             name=nome,
-            line=dict(color=cor_indicador.get(nome, "#58a6ff"), width=2.5),
-            marker=dict(size=6, line=dict(color="#0d1117", width=1)),
+            line=dict(color=cor_indicador.get(nome, "#2B7BB9"), width=2.5),
+            marker=dict(size=6, line=dict(color="rgba(255,255,255,0.4)", width=1)),
             hovertemplate=f"<b>{nome}</b><br>Ano: %{{x}}<br>Valor: %{{y:.1f}}<extra></extra>",
         ))
     # Destaca ano selecionado (eixo numerico — add_vline funciona normalmente)
@@ -762,9 +973,9 @@ def fig_indicadores_historicos(df_ind: pd.DataFrame, sel_ind: list[str],
     if ano_sel in anos_disp:
         fig_ind.add_vline(
             x=ano_sel, line_dash="dot",
-            line_color="#f78166", line_width=1.5,
+            line_color="#E07B54", line_width=1.5,
             annotation_text=str(ano_sel),
-            annotation_font=dict(color="#f78166", size=11),
+            annotation_font=dict(color="#E07B54", size=11),
         )
     tb_layout(fig_ind, altura=420)
     fig_ind.update_layout(
@@ -774,4 +985,5 @@ def fig_indicadores_historicos(df_ind: pd.DataFrame, sel_ind: list[str],
                     font=dict(size=11)),
         hovermode="x unified",
     )
-    st.plotly_chart(fig_ind, use_container_width=True, config={"scrollZoom": False})
+    st.plotly_chart(fig_ind, width='stretch', config={"scrollZoom": False, "displayModeBar": False})
+

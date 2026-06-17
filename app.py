@@ -1,4 +1,4 @@
-"""
+﻿"""
 app.py — Tuberculose no Brasil | SINAN NET
 ──────────────────────────────────────────
 Dashboard completo: dark theme, hero, 8 KPI cards, 6 abas, Folium.
@@ -30,6 +30,10 @@ from src.dados import (
 from src.ui_sidebar import render_sidebar
 from src import graficos
 from src import mapa_interativo
+from src.banco import obitos_sim_por_uf
+
+# Tipos de entrada válidos para cálculo de incidência (Caderno de Indicadores MS)
+_TIPOS_INCIDENCIA = {"Caso Novo", "Não Sabe", "Pós-óbito"}
 from streamlit_folium import st_folium
 
 # Valores inválidos a excluir dos gráficos (valores técnicos, não categorias epidemiológicas)
@@ -47,6 +51,14 @@ st.set_page_config(
 
 from src.styles import inject_css  # noqa: E402
 inject_css()
+
+st.markdown("""
+<div class="cenarios-bar">
+  <span class="cenarios-bar-logo">Cenários<span>+</span></span>
+  <span class="cenarios-bar-sep">|</span>
+  <span class="cenarios-bar-title">Dashboard TB | SINAN</span>
+</div>
+""", unsafe_allow_html=True)
 
 
 
@@ -101,11 +113,30 @@ municipios = df["municipio_notificacao"].nunique() if "municipio_notificacao" in
 
 ufs_sel      = df["uf_sigla"].unique() if "uf_sigla" in df.columns else []
 pop_filtrada = sum(POP_ESTADO.get(uf, 0) for uf in ufs_sel) or POP_BRASIL
-incidencia   = round(total    / pop_filtrada * 100_000, 1)
-mortalidade  = round(obito_tb / pop_filtrada * 100_000, 1)
+
+# Incidência: apenas Caso Novo + Não Sabe + Pós-óbito (Caderno de Indicadores MS)
+if "tipo_entrada" in df.columns:
+    _mask_inc = df["tipo_entrada"].astype(str).isin(_TIPOS_INCIDENCIA)
+    _total_inc = int(_mask_inc.sum())
+else:
+    _total_inc = total
+incidencia  = round(_total_inc / pop_filtrada * 100_000, 1)
+
+# Mortalidade: fonte SIM (Caderno de Indicadores MS — não usa SINAN SITUA_ENCE)
+try:
+    _sim_uf = obitos_sim_por_uf(ano_sel)
+    _sim_filtrado = (
+        _sim_uf[_sim_uf["uf_sigla"].isin(ufs_sel)]
+        if len(ufs_sel) > 0 and len(ufs_sel) < 27
+        else _sim_uf
+    )
+    _obitos_sim = int(_sim_filtrado["obitos_sim"].sum()) if not _sim_filtrado.empty else int(obito_tb)
+except Exception:
+    _obitos_sim = int(obito_tb)
+mortalidade = round(_obitos_sim / pop_filtrada * 100_000, 1)
 
 if "metric_mapa" not in st.session_state:
-    st.session_state.metric_mapa = "casos"
+    st.session_state.metric_mapa = "incidencia"
 if "selected_uf" not in st.session_state:
     st.session_state.selected_uf = None
 if "mapa_key_counter" not in st.session_state:
@@ -145,7 +176,7 @@ for row_cards in [_cards[:4], _cards[4:]]:
                 lbl = "🗺️ No mapa ✓" if sel else "🗺️ Ver no mapa"
                 if st.button(lbl, key=f"kpibtn_{key}",
                              type="primary" if sel else "secondary",
-                             use_container_width=True):
+                             width='stretch'):
                     st.session_state.metric_mapa = mapa_key
                     st.rerun()
 
@@ -163,7 +194,7 @@ def _modal_municipios(uf: str, df_modal: pd.DataFrame) -> None:
 
     m_est = mapa_interativo.mapa_estado(df_modal, uf)
     if m_est is not None:
-        st_folium(m_est, height=480, use_container_width=True,
+        st_folium(m_est, height=480, width='stretch',
                   key=f"dialog_{uf}", returned_objects=[])
         if uf == "DF":
             st.caption("ℹ️ O SINAN registra todos os casos do DF como 'Brasília', sem distinção por Região Administrativa. O mapa exibe as divisões geográficas reais das RAs, mas os dados de casos, cura e óbitos são do DF inteiro.")
@@ -188,9 +219,12 @@ def _modal_municipios(uf: str, df_modal: pd.DataFrame) -> None:
         st.caption(f"Exibindo top {top_n} de {total_mun} municípios com notificações")
         max_casos = int(top_mun["casos"].max())
         margem_dir = max(60, len(f"{max_casos:,}") * 9)
+        import numpy as np
+        top_mun["log_casos"] = np.log10(top_mun["casos"].clip(lower=1))
         fig_mun = px.bar(top_mun, x="casos", y="municipio", orientation="h",
-                         color="casos", color_continuous_scale="YlOrRd",
-                         labels={"casos": "Casos", "municipio": ""},
+                         color="log_casos",
+                         color_continuous_scale=["#f4a261", "#e76f51", "#c0392b", "#7b0c0c"],
+                         labels={"casos": "Casos", "municipio": "", "log_casos": "Casos"},
                          text="casos")
         fig_mun.update_layout(
             height=max(320, top_n * 26), showlegend=False, coloraxis_showscale=False,
@@ -204,7 +238,7 @@ def _modal_municipios(uf: str, df_modal: pd.DataFrame) -> None:
             cliponaxis=False,
             hovertemplate="<b>%{y}</b><br>Casos: %{x:,}<extra></extra>",
         )
-        st.plotly_chart(fig_mun, use_container_width=True)
+        st.plotly_chart(fig_mun, width='stretch')
 
         with st.expander(f"📋 Ver todos os {total_mun} municípios"):
             tabela = (
@@ -213,7 +247,7 @@ def _modal_municipios(uf: str, df_modal: pd.DataFrame) -> None:
                 .rename(columns={"municipio_notificacao": "Município", "count": "Casos"})
             )
             tabela.index = range(1, len(tabela) + 1)
-            st.dataframe(tabela, use_container_width=True, height=300)
+            st.dataframe(tabela, width='stretch', height=300)
 
 
 tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
@@ -231,7 +265,7 @@ with tab1:
     _selected_uf = st.session_state.get("selected_uf")
 
     # Agrega casos/incidência/mortalidade por UF
-    casos_uf = agregar_por_uf(df, enc_norm)
+    casos_uf = agregar_por_uf(df, enc_norm, ano_sel=ano_sel)
 
     _cfg = {
         "casos":       ("casos",      "Total de Casos por Estado",                          "Total de Casos",             "YlOrRd"),
@@ -253,8 +287,12 @@ with tab1:
             else None
         )
 
-        fig_mapa = mapa_interativo.fig_brasil(casos_uf, metrica=_metric, selected_uf=_highlighted_uf)
-        ev = st.plotly_chart(fig_mapa, on_select="rerun", key=f"mapa_br_{st.session_state.mapa_key_counter}", use_container_width=True)
+        m_brasil = mapa_interativo.mapa_brasil(casos_uf, metrica=_metric, selected_uf=_highlighted_uf)
+        result = st_folium(
+            m_brasil, height=500, width="100%",
+            key=f"mapa_br_{st.session_state.mapa_key_counter}",
+            returned_objects=["last_object_clicked_tooltip"],
+        )
 
         # on_change: só dispara quando usuário realmente muda o valor
         def _sel_changed():
@@ -272,17 +310,16 @@ with tab1:
             on_change=_sel_changed,
         )
 
-        # Clique no mapa enfileira — mas não sobrescreve seleção do dropdown no mesmo ciclo
-        if ev and ev.selection and ev.selection.points:
-            if not st.session_state.get("_dialog_uf"):
-                uf_clicado = ev.selection.points[0].get("location")
-                if uf_clicado:
-                    st.session_state["_dialog_uf"] = uf_clicado
+        # Clique no mapa — só dispara se for um estado diferente do último processado
+        uf_clicado = mapa_interativo.extrair_uf_clicado(result)
+        _ultimo_click = st.session_state.get("_last_map_click")
+        if uf_clicado and uf_clicado != _ultimo_click and not st.session_state.get("_dialog_uf"):
+            st.session_state["_dialog_uf"] = uf_clicado
+            st.session_state["_last_map_click"] = uf_clicado
 
-        # Abre o modal uma única vez e consome o trigger
+        # Abre o modal — sem incrementar mapa_key_counter (Folium não precisa)
         if st.session_state.get("_dialog_uf"):
             _uf = st.session_state.pop("_dialog_uf")
-            st.session_state.mapa_key_counter += 1  # reseta seleção do mapa
             _modal_municipios(_uf, df)
 
     with col_uf:
@@ -303,7 +340,7 @@ with tab1:
                                  xaxis=dict(title=_leg_mapa), yaxis=dict(title=""))
             fig_uf.update_traces(marker_line_color="#0d1117", marker_line_width=1,
                                  hovertemplate=f"<b>%{{y}}</b><br>{_leg_mapa}: %{{x}}<extra></extra>")
-            st.plotly_chart(fig_uf, use_container_width=True, config=PLOTLY_CFG)
+            st.plotly_chart(fig_uf, width='stretch', config=PLOTLY_CFG)
 
 # ── ABA 2: PERFIL — pirâmide de casos + pirâmide de óbitos (Raquel ponto 5) ──
 
@@ -374,13 +411,27 @@ with tab2:
 
     st.divider()
 
+    # Desfecho agrupado + Desfecho × Raça/cor
+    d1, d2 = st.columns(2)
+    with d1:
+        st.subheader("Desfecho de Tratamento — Agrupado")
+        st.caption("Casos agrupados em 4 categorias: **Cura**, **Interrupção** (abandono), **Óbito** (por TB ou outras causas) e **Não avaliados** (transferências, TB-DR, em acompanhamento).")
+        graficos.fig_desfecho_agrupado(df)
+    with d2:
+        st.subheader("Desfecho × Raça/Cor")
+        st.caption("Distribuição dos desfechos de tratamento dentro de cada grupo racial. Diferenças entre grupos refletem desigualdades no acesso e na qualidade do cuidado.")
+        graficos.fig_desfecho_por_raca(df)
+
+    st.divider()
+
     # Raquel ponto 5: duas pirâmides — casos e óbitos
     p1, p2 = st.columns(2)
     with p1:
         st.subheader("Pirâmide Etária — Casos de TB")
         st.caption("Distribuição dos casos notificados por faixa etária e sexo")
         if "idade_anos" in df.columns and "sexo" in df.columns:
-            st.plotly_chart(graficos.fig_piramide(df), use_container_width=True, config=PLOTLY_CFG)
+            st.plotly_chart(graficos.fig_piramide(df), width='stretch', config=PLOTLY_CFG)
+            st.caption("🟠 Barras em laranja = faixas etárias **<15 anos** (público prioritário)")
         else:
             grafico_vazio()
     with p2:
@@ -388,7 +439,8 @@ with tab2:
         st.caption("Distribuição dos óbitos por TB por faixa etária e sexo")
         fig_ob = graficos.fig_piramide_obitos(df)
         if fig_ob:
-            st.plotly_chart(fig_ob, use_container_width=True, config=PLOTLY_CFG)
+            st.plotly_chart(fig_ob, width='stretch', config=PLOTLY_CFG)
+            st.caption("🟠 Barras em laranja = faixas etárias **<15 anos** (público prioritário)")
         else:
             st.info("Dados insuficientes de óbitos para a pirâmide.")
 
@@ -462,6 +514,11 @@ with tab4:
             st.markdown("<div style='margin-bottom:6px'></div>", unsafe_allow_html=True)
 
     st.divider()
+    st.subheader("Desfecho de Tratamento × Populações Vulneráveis")
+    st.caption("Como o tratamento termina para cada grupo vulnerável. Populações em situação de rua e privadas de liberdade tendem a ter maior taxa de interrupção e óbito.")
+    graficos.fig_desfecho_por_vulneravel(df)
+
+    st.divider()
     st.subheader("Comorbidades por Estado")
     st.caption("Proporção de casos com cada comorbidade em cada estado (% sobre o total de casos do estado). Permite identificar quais regiões concentram mais pacientes com condições agravantes.")
     graficos.fig_comorbidades_uf(df)
@@ -494,7 +551,7 @@ with tab5:
             fig_mes.update_traces(marker_color="#d29922",
                                   marker_line_color="#0d1117", marker_line_width=1,
                                   hovertemplate="<b>%{x}</b><br>Nº de casos: %{y:,}<extra></extra>")
-            st.plotly_chart(fig_mes, use_container_width=True, config=PLOTLY_CFG)
+            st.plotly_chart(fig_mes, width='stretch', config=PLOTLY_CFG)
     else:
         # KPIs de tendência
         df_mensal = df_hist["mensal"]
@@ -534,7 +591,19 @@ with tab5:
             st.subheader(f"Evolução Histórica de Indicadores Clínicos — {ANO_INICIO}–{ANO_ATUAL}")
             st.caption("Acompanhe como os principais indicadores de TB evoluíram ao longo dos anos. Selecione os indicadores de interesse abaixo. A linha vertical marca o ano selecionado na sidebar.")
             try:
+                from src.banco import historico_pulmonar_conf_lab, historico_contatos
                 df_ind = pd.read_csv(str(HIST_INDICADORES))
+                # Enriquecer com indicadores do PostgreSQL (fonte sinan_tube)
+                _df_pulm = historico_pulmonar_conf_lab()
+                if not _df_pulm.empty and "pct_pulm_conf_lab" in _df_pulm.columns:
+                    df_ind = df_ind.merge(
+                        _df_pulm[["nu_ano", "pct_pulm_conf_lab"]], on="nu_ano", how="left"
+                    )
+                _df_cont = historico_contatos()
+                if not _df_cont.empty and "pct_contatos_exam" in _df_cont.columns:
+                    df_ind = df_ind.merge(
+                        _df_cont[["nu_ano", "pct_contatos_exam"]], on="nu_ano", how="left"
+                    )
                 opcoes_multisel = [
                     "Coeficiente de incidência (por 100 mil)",
                     "Coeficiente de mortalidade (por 100 mil)",
@@ -546,6 +615,8 @@ with tab5:
                     "TDO (%)",
                     "Óbito por TB (%)",
                     "Casos novos (%)",
+                    "TB pulmonar conf. laboratorial (%)",
+                    "Contatos examinados (%)",
                 ]
                 sel_ind = st.multiselect(
                     "Selecione os indicadores:",
@@ -638,7 +709,7 @@ with tab6:
             data=csv_bytes,
             file_name=f"sinan_tb_{'-'.join(str(a) for a in anos_sel)}.csv",
             mime="text/csv",
-            use_container_width=True,
+            width='stretch',
         )
 
     st.divider()
@@ -660,7 +731,7 @@ with tab6:
         )
         col_l, col_btn, col_r = st.columns([2, 1, 2])
         with col_btn:
-            if st.button("▶ Abrir Análise", use_container_width=True, type="primary"):
+            if st.button("▶ Abrir Análise", width='stretch', type="primary"):
                 st.session_state["abrir_pygwalker"] = True
                 st.session_state.pop("_dialog_uf", None)
                 st.session_state.mapa_key_counter += 1  # reseta seleção do mapa
@@ -672,3 +743,19 @@ with tab6:
         if st.button("✕ Fechar Análise", key="fechar_pygwalker"):
             st.session_state["abrir_pygwalker"] = False
             st.rerun()
+
+# ── Footer ────────────────────────────────────────────────────────────────────
+st.markdown("""
+<div style="
+    background:#2B7BB9;
+    border-radius:12px;
+    padding:28px 36px;
+    margin-top:8px;
+">
+    <div style="font-size:1.2rem;font-weight:800;color:#ffffff;letter-spacing:-0.3px;margin-bottom:4px;">
+        Cenários<span style="color:#E07B54">+</span>
+    </div>
+    <div style="font-size:.82rem;color:rgba(255,255,255,.75);">Todos os direitos reservados.</div>
+</div>
+""", unsafe_allow_html=True)
+
