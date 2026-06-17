@@ -1,11 +1,18 @@
 [theme]
-base = "dark"
+base = "light"
+backgroundColor = "#f6f8fa"
+secondaryBackgroundColor = "#ffffff"
+textColor = "#24292f"
+primaryColor = "#2B7BB9"
+font = "sans serif"
 
 [server]
 maxUploadSize = 50
 maxMessageSize = 400
 runOnSave = false
 fileWatcherType = "none"
+baseUrlPath = "cenarios/tb"
 
 [client]
 showErrorDetails = false
+toolbarMode = "viewer"

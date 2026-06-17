@@ -1,4 +1,4 @@
-"""
+﻿"""
 ui_sidebar.py
 ─────────────
 Sidebar de filtros do dashboard TB SINAN.
@@ -43,14 +43,6 @@ def render_sidebar() -> tuple[pd.DataFrame, pd.DataFrame, list, int, int, int]:
             anos_sel = [anos[0]]
         if len(anos_sel) > 2:
             st.caption(f"⚡ {len(anos_sel)} anos selecionados — carregamento pode levar alguns segundos.")
-        if 2026 in anos_sel:
-            st.warning(
-                "⚠️ **2026 — dados parciais**\n\n"
-                "O SINAN tem lag de notificação. Os registros de 2026 ainda estão sendo "
-                "processados e **não representam o total do ano**. Interprete com cautela.",
-                icon="⚠️",
-            )
-
         anos_key = tuple(sorted(anos_sel))
         df_completo = carregar_dados(anos_key)
         if df_completo.empty:
@@ -153,7 +145,7 @@ def render_sidebar() -> tuple[pd.DataFrame, pd.DataFrame, list, int, int, int]:
             filt_tabaco = st.checkbox("Tabagismo",          value=False, key="tab")
             st.caption("_(deixe desmarcado para não filtrar)_")
 
-        if st.button("🔄 Limpar filtros", use_container_width=True):
+        if st.button("🔄 Limpar filtros", width='stretch'):
             st.rerun()
 
     # ── Aplicar filtros ───────────────────────────────────────────────────────
@@ -220,3 +212,4 @@ def render_sidebar() -> tuple[pd.DataFrame, pd.DataFrame, list, int, int, int]:
         st.stop()
 
     return df, df_completo, anos_sel, ano_sel, total_filt, total_base
+
