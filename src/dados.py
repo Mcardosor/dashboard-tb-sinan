@@ -49,10 +49,7 @@ def carregar_dados(anos: tuple) -> pd.DataFrame:
     O app.py usa .astype(str) ao operar, então não vê dtype category.
     """
     from src.banco import query
-    anos_literais = ", ".join(f"'{a}'" for a in anos)
-    df = query(
-        f"SELECT * FROM sinan WHERE CAST(ano_notificacao AS VARCHAR) IN ({anos_literais})"
-    )
+    df = query("SELECT * FROM sinan", anos=anos)
     for col in _COLUNAS_CATEGORIA:
         if col in df.columns:
             df[col] = df[col].astype("category")

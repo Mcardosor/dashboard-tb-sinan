@@ -225,21 +225,39 @@ def _threads() -> int:
     return min(os.cpu_count() or 2, 8)
 
 
-def query(sql: str, params: list | None = None) -> pd.DataFrame:
+def _arquivos_anos(anos: tuple[int, ...]) -> list[str]:
+    """Retorna os caminhos dos Parquets tratados para os anos solicitados."""
+    return [
+        (PASTA_DADOS / f"tuberculose_{ano}_tratado.parquet").as_posix()
+        for ano in anos
+        if (PASTA_DADOS / f"tuberculose_{ano}_tratado.parquet").exists()
+    ]
+
+
+def query(sql: str, params: list | None = None,
+          anos: tuple[int, ...] | None = None) -> pd.DataFrame:
     """
-    Executa SQL sobre todos os Parquets tratados e retorna um DataFrame.
+    Executa SQL sobre os Parquets tratados e retorna um DataFrame.
     Thread-safe: cada chamada usa sua própria conexão DuckDB em memória.
 
-    O SQL do chamador deve referenciar a tabela como 'sinan' — ela é
-    injetada como CTE com apenas as colunas necessárias ao dashboard.
+    Se `anos` for fornecido, lê apenas os arquivos desses anos (muito mais
+    rápido que glob sobre todos os 50+ arquivos + WHERE). Se omitido, usa
+    glob sobre todos os arquivos (compatibilidade com chamadas legadas).
+
+    O SQL do chamador deve referenciar a tabela como 'sinan'.
     """
-    glob = _glob()
     cols = ", ".join(COLUNAS_DASHBOARD)
+    if anos:
+        files = _arquivos_anos(anos)
+        if not files:
+            return pd.DataFrame()
+        files_sql = str(files).replace("'", '"')
+        source = f"read_parquet({files_sql}, union_by_name = true)"
+    else:
+        source = f"read_parquet('{_glob()}', union_by_name = true)"
+
     wrapped = f"""
-        WITH sinan AS (
-            SELECT {cols}
-            FROM read_parquet('{glob}', union_by_name = true)
-        )
+        WITH sinan AS (SELECT {cols} FROM {source})
         {sql}
     """
     with duckdb.connect() as con:
@@ -247,18 +265,21 @@ def query(sql: str, params: list | None = None) -> pd.DataFrame:
         return con.execute(wrapped, params or []).df()
 
 
-def query_all_cols(sql: str, params: list | None = None) -> pd.DataFrame:
+def query_all_cols(sql: str, params: list | None = None,
+                   anos: tuple[int, ...] | None = None) -> pd.DataFrame:
     """
     Igual a query() mas com SELECT * — usado pela aba Análise Livre (PyGWalker).
-    Só deve ser chamado para anos individuais (a carga é maior).
     """
-    glob = _glob()
-    wrapped = f"""
-        WITH sinan AS (
-            SELECT * FROM read_parquet('{glob}', union_by_name = true)
-        )
-        {sql}
-    """
+    if anos:
+        files = _arquivos_anos(anos)
+        if not files:
+            return pd.DataFrame()
+        files_sql = str(files).replace("'", '"')
+        source = f"read_parquet({files_sql}, union_by_name = true)"
+    else:
+        source = f"read_parquet('{_glob()}', union_by_name = true)"
+
+    wrapped = f"WITH sinan AS (SELECT * FROM {source}) {sql}"
     with duckdb.connect() as con:
         con.execute(f"SET threads = {_threads()}")
         return con.execute(wrapped, params or []).df()
