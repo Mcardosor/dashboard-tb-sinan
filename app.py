@@ -30,7 +30,7 @@ from src.dados import (
 from src.ui_sidebar import render_sidebar
 from src import graficos
 from src import mapa_interativo
-from src.banco import obitos_sim_por_uf
+from src.banco import obitos_sim_por_uf, obitos_sim_brasil
 
 # Tipos de entrada válidos para cálculo de incidência (Caderno de Indicadores MS)
 _TIPOS_INCIDENCIA = {"Caso Novo", "Não Sabe", "Pós-óbito"}
@@ -104,33 +104,46 @@ enc_norm = (df["situacao_enc_norm"] if "situacao_enc_norm" in df.columns
 total      = len(df)
 cura       = (enc_norm == "Cura").sum()
 obito_tb   = (enc_norm == "Obito por TB").sum()
-abandono   = (enc_norm == "Abandono").sum()
+abandono   = enc_norm.isin(["Abandono", "Abandono Primario"]).sum()
 hiv_pos    = (df["status_hiv"] == "Positivo").sum() if "status_hiv" in df.columns else 0
 municipios = df["municipio_notificacao"].nunique() if "municipio_notificacao" in df.columns else 0
 
 ufs_sel      = df["uf_sigla"].unique() if "uf_sigla" in df.columns else []
 pop_filtrada = sum(POP_ESTADO.get(uf, 0) for uf in ufs_sel) or POP_BRASIL
 
-# Incidência: apenas Caso Novo + Não Sabe + Pós-óbito (Caderno de Indicadores MS)
+# Número de anos selecionados — coeficientes (por 100 mil) são ANUAIS.
+# Com múltiplos anos, anualizamos (média anual): divide por (população × nº de anos).
+# Sem isso, somar N anos de casos sobre 1 ano de população infla a taxa ~N×.
+_n_anos = max(len(anos_sel), 1)
+
+# Incidência: apenas Caso Novo + Não Sabe + Pós-óbito (Caderno de Indicadores MS),
+# excluindo casos sem UF mapeada (não têm denominador populacional).
 if "tipo_entrada" in df.columns:
     _mask_inc = df["tipo_entrada"].astype(str).isin(_TIPOS_INCIDENCIA)
+    if "uf_sigla" in df.columns:
+        _mask_inc = _mask_inc & (df["uf_sigla"].astype(str) != "?")
     _total_inc = int(_mask_inc.sum())
 else:
     _total_inc = total
-incidencia  = round(_total_inc / pop_filtrada * 100_000, 1)
+incidencia  = round(_total_inc / (pop_filtrada * _n_anos) * 100_000, 1)
 
-# Mortalidade: fonte SIM (Caderno de Indicadores MS — não usa SINAN SITUA_ENCE)
+# Mortalidade: fonte SIM (Caderno de Indicadores MS — não usa SINAN SITUA_ENCE).
+# Soma os óbitos SIM de TODOS os anos selecionados. Nacional usa obitos_sim_brasil
+# (sem filtro de codmunres → não sub-conta óbitos com residência ignorada).
 try:
-    _sim_uf = obitos_sim_por_uf(ano_sel)
-    _sim_filtrado = (
-        _sim_uf[_sim_uf["uf_sigla"].isin(ufs_sel)]
-        if len(ufs_sel) > 0 and len(ufs_sel) < 27
-        else _sim_uf
-    )
-    _obitos_sim = int(_sim_filtrado["obitos_sim"].sum()) if not _sim_filtrado.empty else int(obito_tb)
+    _por_uf = len(ufs_sel) > 0 and len(ufs_sel) < 27
+    _obitos_sim = 0
+    for _a in anos_sel:
+        if _por_uf:
+            _sim_uf = obitos_sim_por_uf(_a)
+            _obitos_sim += int(_sim_uf[_sim_uf["uf_sigla"].isin(ufs_sel)]["obitos_sim"].sum())
+        else:
+            _obitos_sim += int(obitos_sim_brasil(_a) or 0)
+    if _obitos_sim == 0:
+        _obitos_sim = int(obito_tb)
 except Exception:
     _obitos_sim = int(obito_tb)
-mortalidade = round(_obitos_sim / pop_filtrada * 100_000, 1)
+mortalidade = round(_obitos_sim / (pop_filtrada * _n_anos) * 100_000, 1)
 
 if "metric_mapa" not in st.session_state:
     st.session_state.metric_mapa = "incidencia"
@@ -146,8 +159,8 @@ _cards = [
      f"{incidencia:.1f}".replace(".", ","),   None, None, False, "📈", "#58a6ff", "incidencia"),
     ("mortalidade", "Mortalidade por 100 mil hab.",
      f"{mortalidade:.1f}".replace(".", ","),  None, None, False, "💀", "#f85149", "mortalidade"),
-    ("obito",       "Óbitos por TB",
-     f"{obito_tb:,}".replace(",", "."),       None, None, False, "⚠️", "#ffd700", None),
+    ("obito",       "Óbitos por TB (SIM)",
+     f"{_obitos_sim:,}".replace(",", "."),    None, None, False, "⚠️", "#ffd700", None),
     ("hiv",         "Coinfecção HIV",
      f"{hiv_pos:,}".replace(",", "."),        None, None, False, "🔬", "#d2a8ff", None),
     # Linha 2: desfechos + total
@@ -182,69 +195,198 @@ st.divider()
 # ══════════════════════════════════════════════════════════════════════════════
 #  ABAS
 # ══════════════════════════════════════════════════════════════════════════════
+@st.cache_data(show_spinner=False, max_entries=10)
+def _modal_agregar(df_hash: int, uf: str, _df: pd.DataFrame) -> dict:
+    """Agrega todos os dados do modal de uma vez — cacheado por (hash_df, uf)."""
+    mask = _df["estado_notificacao"].astype(str).map(UF_SIGLAS) == uf
+    df_uf = _df.loc[mask].copy()
+    for col in df_uf.select_dtypes("category").columns:
+        df_uf[col] = df_uf[col].astype(str)
+
+    total_uf = int(mask.sum())
+    total_mun = df_uf["municipio_notificacao"].astype(str).nunique()
+
+    enc_col = "situacao_enc_norm" if "situacao_enc_norm" in df_uf.columns else "situacao_encerramento"
+
+    # ── Desfechos: denominador = casos ENCERRADOS (exclui "Em acompanhamento") ──
+    # Metodologia de coorte (MS/OMS): taxas calculadas sobre encerramentos definidos.
+    cura_pct = aband_pct = obito_pct = 0.0
+    n_encerrados = 0
+    pct_acomp = 0.0
+    if enc_col in df_uf.columns:
+        enc = df_uf[enc_col].astype(str)
+        em_acomp = enc.eq("Em acompanhamento")
+        encerrados = enc[~em_acomp]
+        n_encerrados = int(len(encerrados))
+        denom = max(n_encerrados, 1)
+        cura_pct  = round(encerrados.eq("Cura").sum() / denom * 100, 1)
+        aband_pct = round(encerrados.isin(["Abandono", "Abandono Primario"]).sum() / denom * 100, 1)
+        obito_pct = round(encerrados.eq("Obito por TB").sum() / denom * 100, 1)
+        pct_acomp = round(em_acomp.sum() / max(len(enc), 1) * 100, 1)
+
+    # ── Cura separada por tipo de entrada (tempos de tratamento diferentes) ──
+    # Caso novo: esquema ~6 meses. Retratamento (recidiva/reingresso): mais longo.
+    cura_novo_pct = cura_retrat_pct = 0.0
+    n_enc_novo = n_enc_retrat = 0
+    if enc_col in df_uf.columns and "tipo_entrada" in df_uf.columns:
+        te = df_uf["tipo_entrada"].astype(str)
+        enc_full = df_uf[enc_col].astype(str)
+        nao_acomp = ~enc_full.eq("Em acompanhamento")
+        m_novo = te.eq("Caso Novo") & nao_acomp
+        m_retrat = te.isin(["Recidiva", "Reingresso após Abandono", "Reingresso Após Abandono"]) & nao_acomp
+        n_enc_novo = int(m_novo.sum())
+        n_enc_retrat = int(m_retrat.sum())
+        if n_enc_novo:
+            cura_novo_pct = round(enc_full[m_novo].eq("Cura").sum() / n_enc_novo * 100, 1)
+        if n_enc_retrat:
+            cura_retrat_pct = round(enc_full[m_retrat].eq("Cura").sum() / n_enc_retrat * 100, 1)
+
+    # ── HIV: denominador = casos com testagem conhecida (exclui ignorado/não feito) ──
+    hiv_pct = 0.0
+    n_hiv_conhecido = 0
+    pct_hiv_ign = 0.0
+    if "status_hiv" in df_uf.columns:
+        hiv = df_uf["status_hiv"].astype(str)
+        conhecido = hiv.isin(["Positivo", "Negativo"])
+        n_hiv_conhecido = int(conhecido.sum())
+        hiv_pct = round(hiv.eq("Positivo").sum() / max(n_hiv_conhecido, 1) * 100, 1)
+        pct_hiv_ign = round((~conhecido).sum() / max(len(hiv), 1) * 100, 1)
+
+    top20 = (
+        df_uf["municipio_notificacao"].astype(str)
+        .value_counts().head(20).reset_index()
+        .rename(columns={"municipio_notificacao": "municipio", "count": "casos"})
+    )
+
+    return dict(
+        total_uf=total_uf, total_mun=total_mun,
+        cura_pct=cura_pct, aband_pct=aband_pct, obito_pct=obito_pct, hiv_pct=hiv_pct,
+        cura_novo_pct=cura_novo_pct, cura_retrat_pct=cura_retrat_pct,
+        n_enc_novo=n_enc_novo, n_enc_retrat=n_enc_retrat,
+        n_encerrados=n_encerrados, pct_acomp=pct_acomp,
+        n_hiv_conhecido=n_hiv_conhecido, pct_hiv_ign=pct_hiv_ign,
+        top20=top20,
+    )
+
+
+@st.cache_data(show_spinner=False, max_entries=10)
+def _modal_mapa_html(df_hash: int, uf: str, _df: pd.DataFrame) -> str | None:
+    """Renderiza o mapa Folium e retorna HTML puro — cacheado por (hash_df, uf)."""
+    m = mapa_interativo.mapa_estado(_df, uf)
+    if m is None:
+        return None
+    return mapa_interativo.render_html(m, height=420)
+
+
 @st.dialog("Distribuição por Município", width="large")
 def _modal_municipios(uf: str, df_modal: pd.DataFrame) -> None:
+    import numpy as np
     nome = mapa_interativo.uf_para_nome(uf)
-    mask = df_modal["estado_notificacao"].astype(str).map(UF_SIGLAS) == uf
-    total_uf = int(mask.sum())
-    st.markdown(f"**{nome} ({uf})** · {total_uf:,} notificações · 2025")
 
-    m_est = mapa_interativo.mapa_estado(df_modal, uf)
-    if m_est is not None:
-        st_folium(m_est, height=480, width='stretch',
-                  key=f"dialog_{uf}", returned_objects=[])
+    # Chave de cache sensível ao CONTEÚDO (não só shape): evita colisão entre
+    # filtros diferentes que resultem no mesmo nº de linhas → dados do estado errado.
+    if len(df_modal):
+        _sig = int(pd.util.hash_pandas_object(df_modal["municipio_notificacao"], index=False).sum())
+    else:
+        _sig = 0
+    df_hash = hash((df_modal.shape, tuple(df_modal.columns), _sig))
+
+    with st.spinner("Carregando..."):
+        dados = _modal_agregar(df_hash, uf, df_modal)
+        mapa_html = _modal_mapa_html(df_hash, uf, df_modal)
+
+    total_uf  = dados["total_uf"]
+    total_mun = dados["total_mun"]
+
+    # ── Cabeçalho ──────────────────────────────────────────────────────────────
+    st.markdown(f"### 📍 {nome} ({uf})")
+
+    # ── Mapa ───────────────────────────────────────────────────────────────────
+    if mapa_html:
+        components.html(mapa_html, height=430, scrolling=False)
         if uf == "DF":
-            st.caption("ℹ️ O SINAN registra todos os casos do DF como 'Brasília', sem distinção por Região Administrativa. O mapa exibe as divisões geográficas reais das RAs, mas os dados de casos, cura e óbitos são do DF inteiro.")
+            st.caption("ℹ️ Dados do DF inteiro — SINAN não distingue Regiões Administrativas.")
     else:
         st.warning(f"GeoJSON de {uf} não encontrado.")
 
-    if mask.any():
-        st.divider()
-        total_mun = df_modal.loc[mask, "municipio_notificacao"].astype(str).nunique()
-        top_n = st.select_slider(
-            "Exibir top municípios:",
-            options=[10, 15, 20],
-            value=15,
-            key=f"top_n_{uf}",
+    st.divider()
+
+    # ── KPIs + Gráfico lado a lado ─────────────────────────────────────────────
+    col_chart, col_kpi = st.columns([2, 1])
+
+    with col_kpi:
+        st.metric("Notificações", f"{total_uf:,}", help="Total de casos notificados no SINAN (todos os desfechos).")
+        # Cura separada por tipo de entrada — caso novo e retratamento têm
+        # esquemas de tratamento com durações diferentes (não devem ser somados).
+        cN, cR = st.columns(2)
+        cN.metric(
+            "Cura · caso novo", f"{dados['cura_novo_pct']:.1f}%",
+            help=f"Fonte: SINAN. Sobre {dados['n_enc_novo']:,} casos novos encerrados. "
+                 f"Esquema básico ~6 meses. Meta MS: ≥85%.",
         )
-        top_mun = (
-            df_modal.loc[mask, "municipio_notificacao"].astype(str)
-            .value_counts().head(top_n).reset_index()
-            .rename(columns={"municipio_notificacao": "municipio", "count": "casos"})
-            .sort_values("casos", ascending=True)
+        cR.metric(
+            "Cura · retratamento", f"{dados['cura_retrat_pct']:.1f}%",
+            help=f"Fonte: SINAN. Sobre {dados['n_enc_retrat']:,} retratamentos encerrados "
+                 f"(recidiva + reingresso). Tratamento mais longo e menor taxa de cura.",
         )
-        st.caption(f"Exibindo top {top_n} de {total_mun} municípios com notificações")
+        # Abandono: alerta visual quando acima da meta da OMS (<5%)
+        _ab = dados['aband_pct']
+        _ab_label = "🔴 Abandono" if _ab >= 5.0 else "🟢 Abandono"
+        st.metric(
+            _ab_label, f"{_ab:.1f}%",
+            help=f"Fonte: SINAN. Inclui abandono e abandono primário, sobre {dados['n_encerrados']:,} "
+                 f"casos encerrados. Meta OMS: <5%."
+                 + (f" ⚠️ Acima da meta — risco de TB resistente." if _ab >= 5.0 else ""),
+        )
+        st.metric(
+            "Óbitos por TB", f"{dados['obito_pct']:.1f}%",
+            help=f"Fonte: SINAN (desfecho de encerramento). Sobre {dados['n_encerrados']:,} casos "
+                 f"encerrados. ⚠️ A mortalidade oficial vem do SIM, não deste percentual.",
+        )
+        st.metric(
+            "HIV+", f"{dados['hiv_pct']:.1f}%",
+            help=f"Fonte: SINAN. Denominador: {dados['n_hiv_conhecido']:,} casos com testagem conhecida "
+                 f"(exclui {dados['pct_hiv_ign']:.0f}% ignorado/não realizado).",
+        )
+
+    with col_chart:
+        top_n = st.select_slider("Top municípios:", options=[10, 15, 20], value=15, key=f"top_n_{uf}")
+        top_mun = dados["top20"].head(top_n).sort_values("casos", ascending=True)
+        st.caption(f"Top {top_n} de {total_mun} municípios com notificações")
+        top_mun["cor"] = np.log1p(top_mun["casos"])
+        fig_mun = px.bar(
+            top_mun, x="casos", y="municipio", orientation="h",
+            color="cor",
+            color_continuous_scale=["#f4a261", "#e76f51", "#c0392b", "#7b0c0c"],
+            labels={"casos": "Casos", "municipio": "", "cor": ""},
+            text="casos",
+        )
         max_casos = int(top_mun["casos"].max())
-        margem_dir = max(60, len(f"{max_casos:,}") * 9)
-        import numpy as np
-        top_mun["log_casos"] = np.log10(top_mun["casos"].clip(lower=1))
-        fig_mun = px.bar(top_mun, x="casos", y="municipio", orientation="h",
-                         color="log_casos",
-                         color_continuous_scale=["#f4a261", "#e76f51", "#c0392b", "#7b0c0c"],
-                         labels={"casos": "Casos", "municipio": "", "log_casos": "Casos"},
-                         text="casos")
+        margem_dir = max(70, len(f"{max_casos:,}") * 10)
         fig_mun.update_layout(
-            height=max(320, top_n * 26), showlegend=False, coloraxis_showscale=False,
+            height=max(350, top_n * 28), showlegend=False, coloraxis_showscale=False,
             paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-            font_color="#c9d1d9", margin=dict(l=0, r=margem_dir, t=10, b=0),
-            xaxis=dict(type="log", title="Casos (escala log)"),
+            font_color="#c9d1d9", margin=dict(l=0, r=margem_dir, t=5, b=35),
+            xaxis=dict(title="Casos"),
+            yaxis=dict(tickfont=dict(size=12)),
         )
         fig_mun.update_traces(
             marker_line_color="#0d1117", marker_line_width=1,
             texttemplate="%{text:,}", textposition="outside",
-            cliponaxis=False,
+            cliponaxis=False, textfont=dict(size=13, color="#e6edf3"),
             hovertemplate="<b>%{y}</b><br>Casos: %{x:,}<extra></extra>",
         )
-        st.plotly_chart(fig_mun, width='stretch')
+        st.plotly_chart(fig_mun, width='stretch', config={"displayModeBar": False})
 
-        with st.expander(f"📋 Ver todos os {total_mun} municípios"):
-            tabela = (
-                df_modal.loc[mask, "municipio_notificacao"].astype(str)
-                .value_counts().reset_index()
-                .rename(columns={"municipio_notificacao": "Município", "count": "Casos"})
-            )
-            tabela.index = range(1, len(tabela) + 1)
-            st.dataframe(tabela, width='stretch', height=300)
+    with st.expander(f"📋 Ver todos os {total_mun} municípios"):
+        tabela = (
+            df_modal.loc[df_modal["estado_notificacao"].astype(str).map(UF_SIGLAS) == uf,
+                         "municipio_notificacao"].astype(str)
+            .value_counts().reset_index()
+            .rename(columns={"municipio_notificacao": "Município", "count": "Casos"})
+        )
+        tabela.index = range(1, len(tabela) + 1)
+        st.dataframe(tabela, width='stretch', height=300)
 
 
 tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
@@ -262,7 +404,7 @@ with tab1:
     _selected_uf = st.session_state.get("selected_uf")
 
     # Agrega casos/incidência/mortalidade por UF
-    casos_uf = agregar_por_uf(df, enc_norm, ano_sel=ano_sel)
+    casos_uf = agregar_por_uf(df, enc_norm, anos=anos_sel)
 
     _cfg = {
         "casos":       ("casos",      "Total de Casos por Estado",                          "Total de Casos",             "YlOrRd"),
@@ -314,9 +456,10 @@ with tab1:
             st.session_state["_dialog_uf"] = uf_clicado
             st.session_state["_last_map_click"] = uf_clicado
 
-        # Abre o modal — sem incrementar mapa_key_counter (Folium não precisa)
+        # Abre o modal — reseta _last_map_click ao fechar para permitir reabrir o mesmo estado
         if st.session_state.get("_dialog_uf"):
             _uf = st.session_state.pop("_dialog_uf")
+            st.session_state["_last_map_click"] = None
             _modal_municipios(_uf, df)
 
     with col_uf:
@@ -353,7 +496,7 @@ with tab2:
             graficos.safe_pie(d, "Sexo", "Casos", height=H_SMALL)
             n_ign_sexo = int(df["sexo"].isna().sum() + df["sexo"].isin(["Ignorado", "Nao informado", "Não informado"]).sum())
             if n_ign_sexo > 0:
-                st.caption(f"⚠️ {n_ign_sexo:,} casos com sexo não informado/ignorado não aparecem no gráfico acima.")
+                st.caption(f"ℹ️ {n_ign_sexo:,} casos com sexo não informado/ignorado aparecem como categoria própria no gráfico.")
         else:
             grafico_vazio()
     with c2:
@@ -366,7 +509,7 @@ with tab2:
             graficos.safe_pie(d, "Forma", "Casos", height=H_SMALL)
             n_ign_forma = int(df["forma"].isna().sum() + df["forma"].isin(["Ignorado", "Nao informado", "Não informado"]).sum())
             if n_ign_forma > 0:
-                st.caption(f"⚠️ {n_ign_forma:,} casos com forma clínica não informada/ignorada não aparecem no gráfico acima.")
+                st.caption(f"ℹ️ {n_ign_forma:,} casos com forma clínica não informada/ignorada aparecem como categoria própria no gráfico.")
         else:
             grafico_vazio()
 
@@ -486,8 +629,27 @@ with tab3:
 
     st.divider()
     st.subheader("Coinfecção TB-HIV por Estado")
-    st.caption("De cada 100 pacientes com TB no estado, quantos também têm HIV. **Atenção**: este gráfico mostra proporção (%), não quantidade absoluta — estados menores podem ter % mais alta mesmo com menos casos no total.")
+    st.caption("De cada 100 pacientes com TB **testados para HIV** no estado, quantos têm resultado positivo. Denominador = casos com testagem conhecida (exclui não testados/ignorados). **Atenção**: é proporção (%), não quantidade absoluta.")
     graficos.fig_coinfeccao_hiv_uf(df)
+
+    st.divider()
+    st.subheader("⏱️ Oportunidade do Tratamento")
+    st.caption("Quanto tempo o paciente espera entre o diagnóstico e o início do tratamento. O início precoce (idealmente ≤7 dias) interrompe a cadeia de transmissão e melhora o prognóstico.")
+    _tt = graficos.tempo_tratamento_stats(df)
+    if _tt is None:
+        st.info("Dados de datas insuficientes para calcular o tempo de tratamento.")
+    else:
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Início do tratamento (mediana)", f"{_tt['mediana_inicio']:.0f} dias",
+                  help=f"Mediana de dias entre diagnóstico e início do tratamento, sobre {_tt['n']:,} casos com ambas as datas válidas.")
+        m2.metric("Início em ≤7 dias", f"{_tt['pct_ate_7d']:.1f}%",
+                  help="Proporção de casos que iniciaram o tratamento em até 7 dias do diagnóstico — início oportuno.")
+        m3.metric("Início tardio (>30 dias)", f"{_tt['pct_acima_30d']:.1f}%",
+                  help="Proporção com mais de 30 dias entre diagnóstico e início — atraso preocupante.")
+        if _tt["duracao_mediana"] is not None:
+            m4.metric("Duração do tratamento (mediana)", f"{_tt['duracao_mediana']:.0f} dias",
+                      help="Mediana de dias entre notificação e encerramento, para casos encerrados. Esquema básico esperado: ~180 dias (6 meses).")
+        graficos.fig_dist_tempo_tratamento(_tt)
 
 # ── ABA 4: COMORBIDADES ───────────────────────────────────────────────────────
 with tab4:
@@ -578,6 +740,15 @@ with tab5:
         graficos.fig_tendencia_anual(df_hist, ano_sel)
 
         st.divider()
+        st.subheader(f"Evolução Anual de Óbitos por TB (SIM) — {ANO_INICIO}–2024")
+        st.caption("Número de óbitos por tuberculose por ano no Brasil, fonte oficial SIM (CID A15–A19). A barra vermelha destaca o ano selecionado — ou o mais recente disponível, já que o SIM vai até 2024.")
+        try:
+            from src.banco import historico_obitos_sim
+            graficos.fig_obitos_anual(historico_obitos_sim(), ano_sel)
+        except Exception as e:
+            st.warning(f"Não foi possível carregar óbitos do SIM: {e}")
+
+        st.divider()
         st.subheader(f"Variação por Estado — {ano_sel} vs Média Histórica")
         st.caption(f"Quanto cada estado variou em relação à sua própria média de casos ({ANO_INICIO}–{ano_sel-1}). 🔴 Vermelho = mais casos que o habitual (preocupante). 🟢 Verde = menos casos (melhora). 🟡 Amarelo = estável (±5%). Variações grandes podem indicar surtos ou melhorias no registro.")
         graficos.fig_tendencia_uf(df, df_hist, ano_sel, ANOS_HIST)
@@ -601,15 +772,15 @@ with tab5:
                     df_ind = df_ind.merge(
                         _df_cont[["nu_ano", "pct_contatos_exam"]], on="nu_ano", how="left"
                     )
+                # Apenas indicadores com coluna real no CSV/merge — sem opções "fantasma".
+                # (Coef. de incidência/mortalidade exigiriam população por ano, que não
+                #  temos na série histórica; TDO tem ~77% de "Não informado, omitido.)
                 opcoes_multisel = [
-                    "Coeficiente de incidência (por 100 mil)",
-                    "Coeficiente de mortalidade (por 100 mil)",
                     "Taxa de cura (%)",
                     "Taxa de abandono (%)",
                     "Coinfecção HIV (%)",
                     "Forma pulmonar (%)",
                     "Testagem para HIV (%)",
-                    "TDO (%)",
                     "Óbito por TB (%)",
                     "Casos novos (%)",
                     "TB pulmonar conf. laboratorial (%)",
@@ -712,34 +883,49 @@ with tab6:
     st.divider()
 
     if not st.session_state.get("abrir_pygwalker"):
-        st.markdown(
-            """
-            <div style='text-align:center;padding:40px 20px'>
-              <div style='font-size:3rem'>🧪</div>
-              <h3 style='color:#f0f6fc;margin:12px 0 8px'>Exploração interativa de dados</h3>
-              <p style='color:#8b949e;max-width:520px;margin:0 auto 24px'>
-                Arraste campos para os eixos, filtre, agrupe e crie gráficos personalizados.
-                A ferramenta carrega <b>{:,} registros</b> — pode levar alguns segundos
-                dependendo da sua conexão.
-              </p>
-            </div>
-            """.format(n_registros),
-            unsafe_allow_html=True,
-        )
-        col_l, col_btn, col_r = st.columns([2, 1, 2])
-        with col_btn:
-            if st.button("▶ Abrir Análise", width='stretch', type="primary"):
+        col_l, col_cfg, col_r = st.columns([1, 2, 1])
+        with col_cfg:
+            st.markdown(
+                "<div style='text-align:center;padding:24px 0 16px'>"
+                "<div style='font-size:2.8rem'>🧪</div>"
+                "<h3 style='color:#f0f6fc;margin:10px 0 6px'>Exploração Interativa</h3>"
+                "<p style='color:#8b949e;margin:0 0 20px'>Arraste campos para os eixos, filtre e crie gráficos. "
+                "Os dados ficam no servidor — sem travamento.</p>"
+                "</div>",
+                unsafe_allow_html=True,
+            )
+            from src.banco import anos_no_banco
+            _anos_disp = anos_no_banco()
+            _ano_pyg = st.selectbox(
+                "Ano para análise:",
+                options=["Todos os anos selecionados"] + _anos_disp,
+                index=0,
+                key="pyg_ano_sel",
+            )
+            st.caption(f"Filtros da sidebar aplicados · {n_registros:,} registros disponíveis")
+            if st.button("▶  Iniciar Análise", type="primary", width='stretch'):
                 st.session_state["abrir_pygwalker"] = True
-                st.session_state.pop("_dialog_uf", None)
-                st.session_state.mapa_key_counter += 1  # reseta seleção do mapa
+                st.session_state["pyg_ano_fixo"] = _ano_pyg
                 st.rerun()
     else:
+        _ano_fixo = st.session_state.get("pyg_ano_fixo", "Todos os anos selecionados")
+        if _ano_fixo != "Todos os anos selecionados":
+            from src.banco import query_all_cols
+            df_pyg = query_all_cols("SELECT * FROM sinan", anos=(_ano_fixo,))
+            df_pyg = df_pyg.rename(columns={
+                c: _NOMES_AMIGAVEIS[c] for c in df_pyg.columns if c in _NOMES_AMIGAVEIS
+            })
+        else:
+            df_pyg = df_analise
+
+        col_fechar, _ = st.columns([1, 4])
+        with col_fechar:
+            if st.button("✕ Fechar", key="fechar_pygwalker"):
+                st.session_state["abrir_pygwalker"] = False
+                st.rerun()
+
         spec = SPEC_PATH if Path(SPEC_PATH).exists() else None
-        with st.spinner(f"Carregando {n_registros:,} registros na ferramenta de análise..."):
-            render_pygwalker(df_analise, spec_path=spec)
-        if st.button("✕ Fechar Análise", key="fechar_pygwalker"):
-            st.session_state["abrir_pygwalker"] = False
-            st.rerun()
+        render_pygwalker(df_pyg, spec_path=spec)
 
 # ── Footer ────────────────────────────────────────────────────────────────────
 st.markdown("""

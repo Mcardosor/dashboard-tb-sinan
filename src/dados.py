@@ -96,17 +96,15 @@ def selecionar_colunas(df: pd.DataFrame, colunas: tuple) -> pd.DataFrame:
 
 def render_pygwalker(df: pd.DataFrame, spec_path: str | None = None) -> None:
     """
-    Renderiza o PyGWalker via HTML puro — compatível com Docker/servidor.
-    Requer maxMessageSize >= 400 no config.toml do Streamlit.
+    Renderiza o PyGWalker com kernel_computation=True — dados ficam no servidor,
+    apenas agregações são enviadas ao browser. Sem limite de tamanho de mensagem.
     """
     try:
         import pygwalker as pyg
-        import streamlit.components.v1 as components
-        kwargs: dict = {"appearance": "dark"}
+        kwargs: dict = {"appearance": "dark", "kernel_computation": True}
         if spec_path and Path(spec_path).exists():
             kwargs["spec"] = spec_path
-        html = pyg.to_html(df, **kwargs)
-        components.html(html, height=1000, scrolling=True)
+        pyg.walk(df, **kwargs)
     except Exception as e:
         st.error(f"PyGWalker indisponível: {e}")
 
@@ -174,20 +172,45 @@ def load_municipios() -> pd.DataFrame:
 
 
 def agregar_por_uf(df: pd.DataFrame, enc_norm: pd.Series | None = None,
-                   ano_sel: int | None = None) -> pd.DataFrame:
+                   ano_sel: int | None = None, anos: list | None = None) -> pd.DataFrame:
     """
-    Agrega casos, óbitos (fonte SIM quando ano_sel fornecido), incidência e mortalidade por UF.
-    Retorna DataFrame com colunas: uf_sigla, casos, obitos, populacao, incidencia, mortalidade.
+    Agrega casos, óbitos (fonte SIM), incidência e mortalidade por UF.
+    Retorna DataFrame com colunas: uf_sigla, casos, casos_novos, obitos, populacao, incidencia, mortalidade.
+
+    Incidência = CASOS NOVOS / pop (Caderno de Indicadores MS: Caso Novo + Não Sabe + Pós-óbito),
+    não o total de casos — retratamentos/recidivas não entram no coeficiente de incidência.
+
+    Coeficientes (por 100 mil) são ANUAIS: com múltiplos anos selecionados, anualizamos
+    (média anual) dividindo por (população × nº de anos). Óbitos SIM são somados sobre
+    todos os anos selecionados. `anos` = lista de anos; se omitida, usa [ano_sel].
     """
     from src.constantes import POP_ESTADO
     from src.banco import obitos_sim_por_uf
 
+    _TIPOS_INC = {"Caso Novo", "Não Sabe", "Pós-óbito"}
+    _anos = anos if anos else ([ano_sel] if ano_sel is not None else [])
+    _n_anos = max(len(_anos), 1)
+
     casos_uf = df.groupby("uf_sigla", observed=True).size().reset_index(name="casos")
 
-    # Mortalidade oficial: fonte SIM (Caderno de Indicadores MS)
-    if ano_sel is not None:
+    # Casos novos por UF — denominador correto da incidência
+    if "tipo_entrada" in df.columns:
+        _novos = df[df["tipo_entrada"].astype(str).isin(_TIPOS_INC)]
+        casos_novos_uf = _novos.groupby("uf_sigla", observed=True).size().reset_index(name="casos_novos")
+        casos_uf = casos_uf.merge(casos_novos_uf, on="uf_sigla", how="left")
+        casos_uf["casos_novos"] = casos_uf["casos_novos"].fillna(0).astype(int)
+    else:
+        casos_uf["casos_novos"] = casos_uf["casos"]
+
+    # Mortalidade oficial: fonte SIM — soma sobre todos os anos selecionados
+    if _anos:
         try:
-            sim_uf = obitos_sim_por_uf(ano_sel)
+            sim_uf = None
+            for _a in _anos:
+                _s = obitos_sim_por_uf(_a)
+                sim_uf = _s if sim_uf is None else (
+                    pd.concat([sim_uf, _s]).groupby("uf_sigla", as_index=False)["obitos_sim"].sum()
+                )
             casos_uf = casos_uf.merge(sim_uf, on="uf_sigla", how="left")
             casos_uf = casos_uf.rename(columns={"obitos_sim": "obitos"})
         except Exception:
@@ -205,6 +228,7 @@ def agregar_por_uf(df: pd.DataFrame, enc_norm: pd.Series | None = None,
 
     casos_uf["obitos"]      = casos_uf["obitos"].fillna(0).astype(int)
     casos_uf["populacao"]   = casos_uf["uf_sigla"].map(POP_ESTADO)
-    casos_uf["incidencia"]  = (casos_uf["casos"]  / casos_uf["populacao"] * 100_000).round(1)
-    casos_uf["mortalidade"] = (casos_uf["obitos"] / casos_uf["populacao"] * 100_000).round(1)
+    # Anualiza: divide por nº de anos para obter coeficiente anual médio
+    casos_uf["incidencia"]  = (casos_uf["casos_novos"] / (casos_uf["populacao"] * _n_anos) * 100_000).round(1)
+    casos_uf["mortalidade"] = (casos_uf["obitos"]      / (casos_uf["populacao"] * _n_anos) * 100_000).round(1)
     return casos_uf

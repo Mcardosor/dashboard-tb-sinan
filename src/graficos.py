@@ -336,14 +336,17 @@ def fig_coinfeccao_hiv_uf(df: pd.DataFrame) -> None:
     if "status_hiv" not in df.columns or "uf_sigla" not in df.columns:
         grafico_vazio()
         return
-    hiv_uf   = (df[df["status_hiv"] == "Positivo"]
-                .groupby("uf_sigla").size().reset_index(name="hiv_pos"))
-    total_uf = df.groupby("uf_sigla").size().reset_index(name="total")
-    coinfec  = hiv_uf.merge(total_uf, on="uf_sigla")
+    # Coinfecção = HIV+ / testados (Positivo + Negativo) — consistente com o modal.
+    # Usar todos os casos como denominador subestima (conta não-testados como negativos).
+    hiv_uf    = (df[df["status_hiv"] == "Positivo"]
+                 .groupby("uf_sigla").size().reset_index(name="hiv_pos"))
+    testado_uf = (df[df["status_hiv"].isin(["Positivo", "Negativo"])]
+                  .groupby("uf_sigla").size().reset_index(name="testados"))
+    coinfec  = hiv_uf.merge(testado_uf, on="uf_sigla")
     if coinfec.empty:
         grafico_vazio()
         return
-    coinfec["pct"] = (coinfec["hiv_pos"] / coinfec["total"] * 100).round(1)
+    coinfec["pct"] = (coinfec["hiv_pos"] / coinfec["testados"] * 100).round(1)
     coinfec = coinfec.sort_values("pct", ascending=True)
     fig = px.bar(coinfec, x="pct", y="uf_sigla", orientation="h",
                  labels={"pct": "% coinfecção HIV", "uf_sigla": "Estado"}, text="pct")
@@ -522,9 +525,13 @@ def fig_tendencia_mensal(df_filtrado: pd.DataFrame, df_hist: dict,
 
 def fig_tendencia_anual(df_hist: dict, ano_sel: int) -> None:
     """Evolução anual de casos."""
-    anual = df_hist["anual"].sort_values("nu_ano")
+    import datetime as _dt
+    anual = df_hist["anual"].sort_values("nu_ano").copy()
+    anual["nu_ano"] = pd.to_numeric(anual["nu_ano"], errors="coerce")
+    # Remove o ano corrente incompleto (toco) — evita barra minúscula no fim
+    anual = anual[anual["nu_ano"] < _dt.datetime.now().year]
     anual["cor"] = anual["nu_ano"].apply(
-        lambda a: "#da3633" if str(a) == str(ano_sel) else "#2B7BB9"
+        lambda a: "#da3633" if str(int(a)) == str(ano_sel) else "#2B7BB9"
     )
     fig = go.Figure(go.Bar(
         x=anual["nu_ano"], y=anual["casos"],
@@ -536,6 +543,87 @@ def fig_tendencia_anual(df_hist: dict, ano_sel: int) -> None:
     ))
     tb_layout(fig, altura=350)
     fig.update_layout(xaxis=dict(title="Ano"), yaxis=dict(title="Total de casos"),
+                      showlegend=False)
+    st.plotly_chart(fig, width='stretch', config={"scrollZoom": False, "displayModeBar": False})
+
+
+def tempo_tratamento_stats(df: pd.DataFrame) -> dict | None:
+    """
+    Calcula indicadores de oportunidade do tratamento a partir das datas.
+    Retorna dict com medianas e proporções, ou None se faltam colunas.
+    """
+    if "data_diagnostico" not in df.columns or "data_inicio_tratamento" not in df.columns:
+        return None
+    ddi = pd.to_datetime(df["data_diagnostico"], errors="coerce")
+    dit = pd.to_datetime(df["data_inicio_tratamento"], errors="coerce")
+    delay = (dit - ddi).dt.days
+    delay = delay[(delay >= 0) & (delay <= 365)]   # remove datas inválidas/invertidas
+
+    dur_med = None
+    if "data_notificacao" in df.columns and "data_encerramento" in df.columns:
+        dn  = pd.to_datetime(df["data_notificacao"], errors="coerce")
+        dec = pd.to_datetime(df["data_encerramento"], errors="coerce")
+        dur = (dec - dn).dt.days
+        dur = dur[(dur >= 0) & (dur <= 1095)]
+        dur_med = float(dur.median()) if len(dur) else None
+
+    if len(delay) == 0:
+        return None
+    return {
+        "n": int(len(delay)),
+        "mediana_inicio": float(delay.median()),
+        "pct_ate_7d": round((delay <= 7).mean() * 100, 1),
+        "pct_acima_30d": round((delay > 30).mean() * 100, 1),
+        "duracao_mediana": dur_med,
+        "_delay": delay,
+    }
+
+
+def fig_dist_tempo_tratamento(stats: dict) -> None:
+    """Histograma do tempo diagnóstico → início do tratamento (dias)."""
+    delay = stats["_delay"].clip(upper=30)   # agrupa >30 no último bin
+    fig = go.Figure(go.Histogram(
+        x=delay, xbins=dict(start=0, end=31, size=1),
+        marker_color="#2B7BB9",
+        marker_line_color="rgba(255,255,255,0.4)", marker_line_width=0.5,
+        hovertemplate="%{x} dia(s)<br>%{y:,} casos<extra></extra>",
+    ))
+    fig.add_vline(
+        x=7, line_dash="dot", line_color="#f0883e", line_width=1.5,
+        annotation_text="7 dias", annotation_position="top",
+        annotation_font=dict(color="#f0883e", size=10),
+    )
+    tb_layout(fig, altura=320)
+    fig.update_layout(
+        xaxis=dict(title="Dias entre diagnóstico e início do tratamento (≥30 agrupado)"),
+        yaxis=dict(title="Nº de casos"),
+        showlegend=False, bargap=0.05,
+    )
+    st.plotly_chart(fig, width='stretch', config={"scrollZoom": False, "displayModeBar": False})
+
+
+def fig_obitos_anual(df_obitos: pd.DataFrame, ano_sel: int) -> None:
+    """Evolução anual de óbitos por TB (fonte SIM). df_obitos: nu_ano, obitos_sim."""
+    if df_obitos is None or df_obitos.empty:
+        grafico_vazio()
+        return
+    d = df_obitos.sort_values("nu_ano").copy()
+    d["nu_ano"] = pd.to_numeric(d["nu_ano"], errors="coerce")
+    # Se o ano selecionado não está no SIM (ex.: 2025), destaca o mais recente disponível
+    _ano_destaque = ano_sel if (d["nu_ano"] == ano_sel).any() else int(d["nu_ano"].max())
+    d["cor"] = d["nu_ano"].apply(
+        lambda a: "#da3633" if int(a) == _ano_destaque else "#8957e5"
+    )
+    fig = go.Figure(go.Bar(
+        x=d["nu_ano"], y=d["obitos_sim"],
+        marker_color=d["cor"],
+        marker_line_color="rgba(255,255,255,0.4)", marker_line_width=1,
+        text=d["obitos_sim"].apply(lambda v: f"{int(v):,}".replace(",", ".")),
+        textposition="outside", textfont=dict(color="#57606a", size=11),
+        hovertemplate="<b>Ano %{x}</b><br>Óbitos por TB (SIM): %{y:,}<extra></extra>",
+    ))
+    tb_layout(fig, altura=350)
+    fig.update_layout(xaxis=dict(title="Ano"), yaxis=dict(title="Óbitos por TB (SIM)"),
                       showlegend=False)
     st.plotly_chart(fig, width='stretch', config={"scrollZoom": False, "displayModeBar": False})
 
@@ -568,8 +656,8 @@ def fig_tendencia_uf(df_filtrado: pd.DataFrame, df_hist: dict,
         texttemplate="%{text:+.1f}%", textposition="outside",
         textfont=dict(color="#57606a", size=10),
         hovertemplate=(f"<b>%{{y}}</b><br>{ano_sel}: %{{customdata[0]:,}} casos<br>"
-                       "Média histórica: %{{customdata[1]:,.0f}}<br>"
-                       "Variação: %{{x:+.1f}}%<extra></extra>"),
+                       "Média histórica: %{customdata[1]:,.0f}<br>"
+                       "Variação: %{x:+.1f}%<extra></extra>"),
         customdata=uf_comp[[f"casos_{ano_sel}", "media_hist_uf"]].values,
         marker_line_color="rgba(255,255,255,0.4)", marker_line_width=1,
     )
@@ -643,8 +731,8 @@ def fig_piramide_obitos(df: pd.DataFrame) -> go.Figure | None:
 
 def fig_desfecho_por_hiv(df: pd.DataFrame) -> None:
     """
-    Desfecho do tratamento por status HIV (Raquel ponto 6).
-    HIV+ tem piores desfechos (mais óbito e abandono).
+    Desfecho do tratamento por status HIV — AGRUPADO em 4 categorias
+    (Cura, Interrupção, Óbito, Não avaliados). HIV+ tem piores desfechos.
     """
     col_hiv = "status_hiv"
     col_enc = "situacao_enc_norm" if "situacao_enc_norm" in df.columns else "situacao_encerramento"
@@ -654,53 +742,48 @@ def fig_desfecho_por_hiv(df: pd.DataFrame) -> None:
         return
 
     hiv_order = ["Positivo", "Negativo", "Em andamento", "Não realizado", "Ignorado"]
-    enc_order = ["Cura", "Obito por TB", "Obito por outras causas",
-                 "Abandono", "Abandono Primario", "Transferencia", "Falencia", "TB-DR"]
-    enc_labels = {
-        "Cura":                  "Cura",
-        "Obito por TB":          "Óbito por TB",
-        "Obito por outras causas":"Óbito outras causas",
-        "Abandono":              "Abandono",
-        "Abandono Primario":     "Abandono Primário",
-        "Transferencia":         "Transferência",
-        "Falencia":              "Falência",
-        "TB-DR":                 "TB-DR",
+    GRUPOS = {
+        "Cura":          ["Cura"],
+        "Interrupção":   ["Abandono", "Abandono Primario"],
+        "Óbito":         ["Obito por TB", "Obito por outras causas"],
+        "Não avaliados": ["Transferencia", "Mudanca de Esquema", "Falencia",
+                          "TB-DR", "Em acompanhamento"],
     }
-    cor_enc = {
-        "Cura":                  "#2ea043",
-        "Óbito por TB":          "#da3633",
-        "Óbito outras causas":   "#8957e5",
-        "Abandono":              "#d29922",
-        "Abandono Primário":     "#bb8009",
-        "Transferência":         "#58a6ff",
-        "Falência":              "#f85149",
-        "TB-DR":                 "#cf222e",
+    COR_GRUPOS = {
+        "Cura":          "#2ea043",
+        "Interrupção":   "#d29922",
+        "Óbito":         "#da3633",
+        "Não avaliados": "#8b949e",
     }
+    grupo_order = ["Cura", "Interrupção", "Óbito", "Não avaliados"]
+
+    def mapear_grupo(enc):
+        for grupo, vals in GRUPOS.items():
+            if enc in vals:
+                return grupo
+        return None
 
     df_plot = df[[col_hiv, col_enc]].copy()
     df_plot[col_enc] = df_plot[col_enc].astype(str).map(lambda x: NORMALIZAR_DESFECHO.get(x, x))
     df_plot[col_hiv] = df_plot[col_hiv].astype(str)
-    df_plot = df_plot[
-        df_plot[col_hiv].isin(hiv_order) &
-        df_plot[col_enc].isin(enc_order)
-    ]
+    df_plot["grupo"] = df_plot[col_enc].map(mapear_grupo)
+    df_plot = df_plot[df_plot[col_hiv].isin(hiv_order)].dropna(subset=["grupo"])
     if df_plot.empty:
         grafico_vazio()
         return
 
-    ct = (df_plot.groupby([col_hiv, col_enc]).size()
-          .reset_index(name="n"))
+    ct = df_plot.groupby([col_hiv, "grupo"]).size().reset_index(name="n")
     total_hiv = ct.groupby(col_hiv)["n"].sum().reset_index(name="total_hiv")
     ct = ct.merge(total_hiv, on=col_hiv)
     ct["pct"] = (ct["n"] / ct["total_hiv"] * 100).round(1)
-    ct["enc_label"] = ct[col_enc].map(enc_labels).fillna(ct[col_enc])
 
     fig = px.bar(
-        ct, x=col_hiv, y="pct", color="enc_label",
-        color_discrete_map=cor_enc,
-        labels={col_hiv: "Status HIV", "pct": "% dos casos", "enc_label": "Desfecho"},
+        ct, x=col_hiv, y="pct", color="grupo",
+        color_discrete_map=COR_GRUPOS,
+        labels={col_hiv: "Status HIV", "pct": "% dos casos", "grupo": "Desfecho"},
         barmode="stack",
-        category_orders={col_hiv: hiv_order},
+        category_orders={col_hiv: hiv_order, "grupo": grupo_order},
+        custom_data=["grupo", "n"],
         text="pct",
     )
     tb_layout(fig, altura=420)
@@ -709,7 +792,7 @@ def fig_desfecho_por_hiv(df: pd.DataFrame) -> None:
         textposition="inside",
         insidetextanchor="middle",
         textfont=dict(color="white", size=10),
-        hovertemplate="<b>HIV %{x}</b><br>%{data.name}: %{y:.1f}%<extra></extra>",
+        hovertemplate="<b>HIV %{x}</b><br>%{customdata[0]}: %{y:.1f}% (%{customdata[1]:,} casos)<extra></extra>",
         marker_line_color="rgba(255,255,255,0.4)", marker_line_width=1,
     )
     fig.update_layout(

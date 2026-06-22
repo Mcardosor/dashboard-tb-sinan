@@ -117,14 +117,22 @@ ind = con.execute("""
 
         SUM(CASE WHEN LOWER(TRIM(status_hiv)) = 'positivo'
                  THEN 1 ELSE 0 END)                            AS hiv_pos,
+        -- HIV com resultado conhecido (denominador da coinfecção e da testagem)
+        SUM(CASE WHEN LOWER(TRIM(status_hiv)) IN ('positivo','negativo')
+                 THEN 1 ELSE 0 END)                            AS hiv_testado,
 
         SUM(CASE WHEN TRIM(situacao_encerramento) = 'Cura'
                  THEN 1 ELSE 0 END)                            AS cura,
+        -- valores crus do parquet são ACENTUADOS (antes da normalização do app)
         SUM(CASE WHEN TRIM(situacao_encerramento)
-                      IN ('Abandono','Abandono Primario')
+                      IN ('Abandono','Abandono Primário')
                  THEN 1 ELSE 0 END)                            AS abandono,
-        SUM(CASE WHEN TRIM(situacao_encerramento) = 'Obito por TB'
+        SUM(CASE WHEN TRIM(situacao_encerramento) = 'Óbito por TB'
                  THEN 1 ELSE 0 END)                            AS obito_tb,
+        -- Encerrados = casos com desfecho definido (exclui "Não informado" = em acompanhamento)
+        SUM(CASE WHEN TRIM(situacao_encerramento) NOT IN ('Não informado','Nao informado','')
+                  AND situacao_encerramento IS NOT NULL
+                 THEN 1 ELSE 0 END)                            AS encerrados,
 
         SUM(CASE WHEN TRIM(tipo_entrada) = 'Caso Novo'
                  THEN 1 ELSE 0 END)                            AS caso_novo,
@@ -146,11 +154,17 @@ ind = con.execute("""
     ORDER BY 1
 """).df()
 
-t = ind["total"].replace(0, 1)
-ind["pct_hiv"]    = (ind["hiv_pos"]   / t * 100).round(1)
-ind["pct_cura"]   = (ind["cura"]      / t * 100).round(1)
-ind["pct_abandon"]= (ind["abandono"]  / t * 100).round(1)
-ind["pct_obito"]  = (ind["obito_tb"]  / t * 100).round(1)
+t   = ind["total"].replace(0, 1)
+enc = ind["encerrados"].replace(0, 1)   # denominador de desfecho (coorte)
+tst = ind["hiv_testado"].replace(0, 1)  # denominador de coinfecção HIV
+# Coinfecção HIV = positivo / testados (consistente com modal e gráfico por UF)
+ind["pct_hiv"]      = (ind["hiv_pos"]   / tst * 100).round(1)
+# Cobertura de testagem HIV = testados / total
+ind["pct_test_hiv"] = (ind["hiv_testado"] / t * 100).round(1)
+# Desfechos sobre ENCERRADOS (não sobre o total) — metodologia de coorte
+ind["pct_cura"]   = (ind["cura"]      / enc * 100).round(1)
+ind["pct_abandon"]= (ind["abandono"]  / enc * 100).round(1)
+ind["pct_obito"]  = (ind["obito_tb"]  / enc * 100).round(1)
 ind["pct_novo"]   = (ind["caso_novo"] / t * 100).round(1)
 ind["pct_pulm"]   = (ind["pulmonar"]  / t * 100).round(1)
 ind["pct_aids"]   = (ind["aids"]      / t * 100).round(1)

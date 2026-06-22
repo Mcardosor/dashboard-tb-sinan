@@ -289,7 +289,7 @@ def anos_no_banco() -> list[int]:
     """Retorna anos com Parquet tratado disponível, do mais recente ao mais antigo."""
     return sorted(
         [
-            int(p.stem.split("_")[2])
+            int(p.stem.split("_")[1])
             for p in PASTA_DADOS.glob("tuberculose_*_tratado.parquet")
         ],
         reverse=True,

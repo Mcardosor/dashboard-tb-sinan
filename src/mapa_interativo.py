@@ -130,7 +130,8 @@ def fig_brasil(casos_uf: pd.DataFrame, metrica: str = "casos", selected_uf: str 
         plot_bgcolor="rgba(0,0,0,0)",
         hoverlabel=dict(bgcolor="#1a3a5c", font_color="#ffffff", font_size=13),
         height=500,
-        clickmode="event+select",
+        clickmode="event",
+        dragmode="pan",
     )
     return fig
 
@@ -141,6 +142,7 @@ def fig_brasil(casos_uf: pd.DataFrame, metrica: str = "casos", selected_uf: str 
 
 _CARTO_LIGHT = "CartoDB positron"
 _CARTO_ATTR  = ""
+
 
 
 def _cmap_brasil(max_val: float) -> cm.LinearColormap:
@@ -223,6 +225,7 @@ def mapa_brasil(casos_uf: pd.DataFrame, metrica: str = "casos",
     m.get_root().html.add_child(folium.Element(
         "<style>.leaflet-container{background:#f0f2f5!important}</style>"
     ))
+    m.get_root().script.add_child(folium.Element(f"{m._name}.boxZoom.disable();"))
 
     def _style(feature):
         uf  = feature["properties"].get("uf", "")
@@ -304,8 +307,8 @@ def _mapa_df(df: pd.DataFrame) -> folium.Map | None:
     sw, ne = _bbox_geojson(geojson)
     center = [(sw[0] + ne[0]) / 2, (sw[1] + ne[1]) / 2]
 
-    m = folium.Map(location=center, zoom_start=9, tiles=None)
-    folium.TileLayer(tiles=_CARTO_LIGHT, attr=_CARTO_ATTR).add_to(m)
+    m = folium.Map(location=center, zoom_start=9, tiles=None, max_zoom=11)
+    folium.TileLayer(tiles=_CARTO_LIGHT, attr=_CARTO_ATTR, max_zoom=11).add_to(m)
     m.get_root().html.add_child(folium.Element("<style>.leaflet-container{background:#f0f2f5!important}</style>"))
 
     folium.GeoJson(
@@ -404,9 +407,10 @@ def mapa_estado(df: pd.DataFrame, uf: str) -> folium.Map | None:
     sw, ne = _bbox_geojson(geojson)
     center = [(sw[0] + ne[0]) / 2, (sw[1] + ne[1]) / 2]
 
-    m = folium.Map(location=center, zoom_start=6, tiles=None)
-    folium.TileLayer(tiles=_CARTO_LIGHT, attr=_CARTO_ATTR).add_to(m)
+    m = folium.Map(location=center, zoom_start=6, tiles=None, max_zoom=9)
+    folium.TileLayer(tiles=_CARTO_LIGHT, attr=_CARTO_ATTR, max_zoom=9).add_to(m)
     m.get_root().html.add_child(folium.Element("<style>.leaflet-container{background:#f0f2f5!important}</style>"))
+    m.get_root().script.add_child(folium.Element(f"{m._name}.boxZoom.disable();"))
 
     def _style(feature):
         cd  = str(feature["properties"].get("CD_MUN", ""))
@@ -418,7 +422,7 @@ def mapa_estado(df: pd.DataFrame, uf: str) -> folium.Map | None:
             "color":       "#5a4a3a",
             "weight":      1.0,
             "opacity":     0.8,
-            "smoothFactor": 0,
+            "smoothFactor": 0.5,
             "lineJoin":    "round",
             "lineCap":     "round",
         }
@@ -426,7 +430,7 @@ def mapa_estado(df: pd.DataFrame, uf: str) -> folium.Map | None:
     folium.GeoJson(
         geojson,
         style_function=_style,
-        highlight_function=lambda x: {"fillOpacity": 1.0, "weight": 2.0, "color": "#ffffff", "smoothFactor": 0},
+        highlight_function=lambda x: {"fillOpacity": 1.0, "weight": 2.0, "color": "#ffffff", "smoothFactor": 0.5},
         tooltip=folium.GeoJsonTooltip(
             fields=["NM_MUN", "CASOS", "CURA", "ABANDONO", "OBITOS", "HIV"],
             aliases=["📍 Município", "📊 Casos", "✅ Cura", "⚠️ Abandono", "💀 Óbitos TB", "🔴 HIV+"],
