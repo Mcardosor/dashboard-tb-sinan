@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(streamlit run *)",
+      "Bash(streamlit *)",
+      "Bash(pip install *)",
+      "Bash(pip *)",
+      "Bash(python scripts/gerar_dados_sinteticos.py *)",
+      "Bash(python scripts/preparar_geo_cache.py *)",
+      "Bash(python scripts/preparar_dados.py *)",
+      "Bash(python scripts/conectar_banco.py *)",
+      "Bash(python scripts/gerar_historico.py *)"
+    ]
+  }
+}

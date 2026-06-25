@@ -82,7 +82,7 @@ def safe_pie(df_plot: pd.DataFrame, names: str, values: str,
         text=["" if (v / total_val) < 0.06 else f"{v/total_val:.1%}"
               for v in df_plot[values]]
     ))
-    st.plotly_chart(fig, use_container_width=True,
+    st.plotly_chart(fig, width='stretch',
                     config={"displayModeBar": False, "scrollZoom": False})
 
 

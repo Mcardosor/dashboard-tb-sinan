@@ -205,7 +205,7 @@ for row_cards in [_cards[:4], _cards[4:]]:
                 lbl = "🗺️ No mapa ✓" if sel else "🗺️ Ver no mapa"
                 if st.button(lbl, key=f"kpibtn_{key}",
                              type="primary" if sel else "secondary",
-                             use_container_width=True):
+                             width='stretch'):
                     st.session_state.metric_mapa = mapa_key
                     st.rerun()
 
@@ -515,7 +515,7 @@ with tab1:
                                  xaxis=dict(title=_leg_mapa), yaxis=dict(title=""))
             fig_uf.update_traces(marker_line_color="#0d1117", marker_line_width=1,
                                  hovertemplate=f"<b>%{{y}}</b><br>{_leg_mapa}: %{{x}}<extra></extra>")
-            st.plotly_chart(fig_uf, use_container_width=True, config=PLOTLY_CFG)
+            st.plotly_chart(fig_uf, width='stretch', config=PLOTLY_CFG)
 
 # ── ABA 2: PERFIL — pirâmide de casos + pirâmide de óbitos (Raquel ponto 5) ──
 
@@ -745,7 +745,7 @@ with tab5:
             fig_mes.update_traces(marker_color="#d29922",
                                   marker_line_color="#0d1117", marker_line_width=1,
                                   hovertemplate="<b>%{x}</b><br>Nº de casos: %{y:,}<extra></extra>")
-            st.plotly_chart(fig_mes, use_container_width=True, config=PLOTLY_CFG)
+            st.plotly_chart(fig_mes, width='stretch', config=PLOTLY_CFG)
     else:
         # KPIs de tendência
         df_mensal = df_hist["mensal"]
@@ -912,7 +912,7 @@ with tab6:
             data=csv_bytes,
             file_name=f"sinan_tb_{'-'.join(str(a) for a in anos_sel)}.csv",
             mime="text/csv",
-            use_container_width=True,
+            width='stretch',
         )
 
     st.divider()
@@ -929,11 +929,30 @@ with tab6:
                 "</div>",
                 unsafe_allow_html=True,
             )
+            from src.banco import anos_no_banco
+            _anos_disp = anos_no_banco()
+            _ano_pyg = st.selectbox(
+                "Ano para análise:",
+                options=["Todos os anos selecionados"] + _anos_disp,
+                index=0,
+                key="pyg_ano_sel",
+            )
             st.caption(f"Filtros da sidebar aplicados · {n_registros:,} registros disponíveis")
             if st.button("▶  Iniciar Análise", type="primary", use_container_width=True):
                 st.session_state["abrir_pygwalker"] = True
+                st.session_state["pyg_ano_fixo"] = _ano_pyg
                 st.rerun()
     else:
+        _ano_fixo = st.session_state.get("pyg_ano_fixo", "Todos os anos selecionados")
+        if _ano_fixo != "Todos os anos selecionados":
+            from src.banco import query_all_cols
+            df_pyg = query_all_cols("SELECT * FROM sinan", anos=(_ano_fixo,))
+            df_pyg = df_pyg.rename(columns={
+                c: _NOMES_AMIGAVEIS[c] for c in df_pyg.columns if c in _NOMES_AMIGAVEIS
+            })
+        else:
+            df_pyg = df_analise
+
         col_fechar, _ = st.columns([1, 4])
         with col_fechar:
             if st.button("✕ Fechar", key="fechar_pygwalker"):
@@ -941,7 +960,7 @@ with tab6:
                 st.rerun()
 
         spec = SPEC_PATH if Path(SPEC_PATH).exists() else None
-        render_pygwalker(df_analise, spec_path=spec)
+        render_pygwalker(df_pyg, spec_path=spec)
 
 # ── Footer ────────────────────────────────────────────────────────────────────
 st.markdown("""

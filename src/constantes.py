@@ -131,12 +131,6 @@ CORES_DESFECHOS = {
     "Obito por TB":            "#da3633",
 }
 
-CORES_RACA = {
-    "Parda":    "#d2a8ff", "Branca": "#79c0ff",
-    "Preta":    "#a371f7", "Amarela": "#f0b342", "Indigena": "#3fb950",
-    "Indígena": "#3fb950",
-}
-
 CORES_FORMA = {
     "Pulmonar":                 "#58a6ff",
     "Extrapulmonar":            "#a371f7",

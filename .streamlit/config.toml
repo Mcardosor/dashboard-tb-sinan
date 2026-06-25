@@ -15,4 +15,4 @@ baseUrlPath = "cenarios/tb"
 
 [client]
 showErrorDetails = false
-toolbarMode = "auto"
+toolbarMode = "viewer"

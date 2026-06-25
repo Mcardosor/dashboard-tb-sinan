@@ -145,7 +145,7 @@ def render_sidebar() -> tuple[pd.DataFrame, pd.DataFrame, list, int, int, int]:
             filt_tabaco = st.checkbox("Tabagismo",          value=False, key="tab")
             st.caption("_(deixe desmarcado para não filtrar)_")
 
-        if st.button("🔄 Limpar filtros", use_container_width=True):
+        if st.button("🔄 Limpar filtros", width='stretch'):
             st.rerun()
 
     # ── Aplicar filtros ───────────────────────────────────────────────────────
