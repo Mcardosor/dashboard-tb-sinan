@@ -28,3 +28,4 @@ Thumbs.db
 
 # Documentação interna (não sobe no git)
 docs/
+.claude/
