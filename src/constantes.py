@@ -40,7 +40,8 @@ def anos_disponiveis() -> list[int]:
     for f in arquivos:
         try:
             ano = int(f.stem.split("_")[1])
-            anos.append(ano)
+            if ano <= 2025:
+                anos.append(ano)
         except (IndexError, ValueError):
             pass
     return anos if anos else [2025]
@@ -143,9 +144,9 @@ CORES_FORMA = {
 }
 
 ESCALA_MAPA = [
-    [0.0,  "#0d1117"], [0.15, "#1f4d8a"],
-    [0.35, "#1f6feb"], [0.55, "#58a6ff"],
-    [0.75, "#a5d6ff"], [1.0,  "#cae8ff"],
+    [0.0,  "#eaf4fc"], [0.15, "#a5d6ff"],
+    [0.35, "#58a6ff"], [0.55, "#2B7BB9"],
+    [0.75, "#1a4a80"], [1.0,  "#1a3a5c"],
 ]
 
 # ── Paleta TB — semântica epidemiológica ──────────────────────────────────────
@@ -209,8 +210,8 @@ TB_COLORS = {
 }
 
 # Paletas sequenciais para mapas
-TB_SEQ_INCIDENCIA = ["#0d1117", "#1f4d8a", "#1f6feb", "#58a6ff", "#79c0ff", "#a5d6ff"]
-TB_SEQ_MORTAL     = ["#0d1117", "#67060c", "#a40e26", "#da3633", "#f85149", "#ffa198"]
+TB_SEQ_INCIDENCIA = ["#eaf4fc", "#a5d6ff", "#58a6ff", "#2B7BB9", "#1a4a80", "#1a3a5c"]
+TB_SEQ_MORTAL     = ["#fff0ee", "#ffa198", "#f85149", "#da3633", "#a40e26", "#67060c"]
 
 # Sequência para categorias sem cor semântica definida
 CORES = ["#58a6ff", "#a371f7", "#3fb950", "#d29922", "#f778ba", "#79c0ff", "#d2a8ff"]
@@ -233,21 +234,21 @@ def tb_color_map(labels: list[str]) -> dict:
 PLOTLY_TEMPLATE = {
     "layout": {
         "font": {"family": "Inter, -apple-system, system-ui, sans-serif",
-                 "color": "#c9d1d9", "size": 12},
+                 "color": "#24292f", "size": 12},
         "paper_bgcolor": "rgba(0,0,0,0)",
         "plot_bgcolor":  "rgba(0,0,0,0)",
-        "title": {"font": {"size": 15, "color": "#f0f6fc", "family": "Inter, sans-serif"},
+        "title": {"font": {"size": 15, "color": "#1a3a5c", "family": "Inter, sans-serif"},
                   "x": 0.02, "xanchor": "left", "pad": {"t": 10, "b": 5}},
-        "xaxis": {"gridcolor": "#21262d", "linecolor": "#30363d",
-                  "tickfont": {"color": "#8b949e", "size": 11},
-                  "title_font": {"color": "#c9d1d9", "size": 12}},
-        "yaxis": {"gridcolor": "#21262d", "linecolor": "#30363d",
-                  "tickfont": {"color": "#8b949e", "size": 11},
-                  "title_font": {"color": "#c9d1d9", "size": 12}},
-        "legend": {"bgcolor": "rgba(22,27,34,.7)", "bordercolor": "#30363d",
-                   "borderwidth": 1, "font": {"color": "#c9d1d9", "size": 11}},
-        "hoverlabel": {"bgcolor": "#161b22", "bordercolor": "#30363d",
-                       "font": {"color": "#f0f6fc", "family": "Inter, sans-serif"}},
+        "xaxis": {"gridcolor": "#f0f2f5", "linecolor": "#d0d7de",
+                  "tickfont": {"color": "#57606a", "size": 11},
+                  "title_font": {"color": "#24292f", "size": 12}},
+        "yaxis": {"gridcolor": "#f0f2f5", "linecolor": "#d0d7de",
+                  "tickfont": {"color": "#57606a", "size": 11},
+                  "title_font": {"color": "#24292f", "size": 12}},
+        "legend": {"bgcolor": "rgba(255,255,255,.95)", "bordercolor": "#d0d7de",
+                   "borderwidth": 1, "font": {"color": "#24292f", "size": 11}},
+        "hoverlabel": {"bgcolor": "rgba(255,255,255,.98)", "bordercolor": "#d0d7de",
+                       "font": {"color": "#24292f", "family": "Inter, sans-serif"}},
         "margin": {"l": 50, "r": 30, "t": 50, "b": 50},
     }
 }
@@ -258,11 +259,11 @@ BG = {
     "plot_bgcolor":  "rgba(0,0,0,0)",
 }
 HOVER_LABEL = dict(
-    bgcolor="rgba(30,30,40,0.95)",
-    bordercolor="rgba(255,255,255,0.15)",
-    font=dict(size=13),
+    bgcolor="rgba(255,255,255,.98)",
+    bordercolor="#d0d7de",
+    font=dict(size=13, color="#24292f"),
 )
-PLOTLY_CFG = {"scrollZoom": False}
+PLOTLY_CFG = {"scrollZoom": False, "displayModeBar": False}
 
 
 # ── Alturas padrão de gráficos ─────────────────────────────────────────────────

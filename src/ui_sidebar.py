@@ -1,4 +1,4 @@
-"""
+﻿"""
 ui_sidebar.py
 ─────────────
 Sidebar de filtros do dashboard TB SINAN.
@@ -43,14 +43,6 @@ def render_sidebar() -> tuple[pd.DataFrame, pd.DataFrame, list, int, int, int]:
             anos_sel = [anos[0]]
         if len(anos_sel) > 2:
             st.caption(f"⚡ {len(anos_sel)} anos selecionados — carregamento pode levar alguns segundos.")
-        if 2026 in anos_sel:
-            st.warning(
-                "⚠️ **2026 — dados parciais**\n\n"
-                "O SINAN tem lag de notificação. Os registros de 2026 ainda estão sendo "
-                "processados e **não representam o total do ano**. Interprete com cautela.",
-                icon="⚠️",
-            )
-
         anos_key = tuple(sorted(anos_sel))
         df_completo = carregar_dados(anos_key)
         if df_completo.empty:
@@ -67,11 +59,11 @@ def render_sidebar() -> tuple[pd.DataFrame, pd.DataFrame, list, int, int, int]:
         with st.expander("📍 Localização", expanded=True):
             ufs_disp = sorted(df_completo["estado_notificacao"].dropna().unique())
 
-            _regiao_sel = st.pills(
+            _regiao_sel = st.radio(
                 "Região",
                 options=["Todas"] + list(REGIOES.keys()),
-                default="Todas",
-                key="regiao_pills",
+                index=0,
+                key="regiao_pills", horizontal=True,
                 label_visibility="collapsed",
             )
             if not _regiao_sel:
@@ -220,3 +212,4 @@ def render_sidebar() -> tuple[pd.DataFrame, pd.DataFrame, list, int, int, int]:
         st.stop()
 
     return df, df_completo, anos_sel, ano_sel, total_filt, total_base
+

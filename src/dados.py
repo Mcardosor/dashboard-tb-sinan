@@ -105,7 +105,7 @@ def render_pygwalker(df: pd.DataFrame, spec_path: str | None = None) -> None:
     try:
         import pygwalker as pyg
         import streamlit.components.v1 as components
-        kwargs: dict = {"appearance": "dark"}
+        kwargs: dict = {"appearance": "light"}
         if spec_path and Path(spec_path).exists():
             kwargs["spec"] = spec_path
         html = pyg.to_html(df, **kwargs)
@@ -176,7 +176,7 @@ def load_municipios() -> pd.DataFrame:
         return pd.DataFrame(columns=["codigo_6", "nome", "latitude", "longitude"])
 
 
-def agregar_por_uf(df: pd.DataFrame, enc_norm: pd.Series | None = None) -> pd.DataFrame:
+def agregar_por_uf(df: pd.DataFrame, enc_norm: pd.Series | None = None, anos=None) -> pd.DataFrame:
     """
     Agrega casos, óbitos, incidência e mortalidade por UF.
     Retorna DataFrame com colunas: uf_sigla, casos, obitos, populacao, incidencia, mortalidade.
