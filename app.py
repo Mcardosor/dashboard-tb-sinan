@@ -929,29 +929,12 @@ with tab6:
                 "</div>",
                 unsafe_allow_html=True,
             )
-            from src.banco import anos_no_banco
-            _anos_disp = anos_no_banco()
-            _ano_pyg = st.selectbox(
-                "Ano para análise:",
-                options=["Todos os anos selecionados"] + _anos_disp,
-                index=0,
-                key="pyg_ano_sel",
-            )
             st.caption(f"Filtros da sidebar aplicados · {n_registros:,} registros disponíveis")
             if st.button("▶  Iniciar Análise", type="primary", use_container_width=True):
                 st.session_state["abrir_pygwalker"] = True
-                st.session_state["pyg_ano_fixo"] = _ano_pyg
                 st.rerun()
     else:
-        _ano_fixo = st.session_state.get("pyg_ano_fixo", "Todos os anos selecionados")
-        if _ano_fixo != "Todos os anos selecionados":
-            from src.banco import query_all_cols
-            df_pyg = query_all_cols("SELECT * FROM sinan", anos=(_ano_fixo,))
-            df_pyg = df_pyg.rename(columns={
-                c: _NOMES_AMIGAVEIS[c] for c in df_pyg.columns if c in _NOMES_AMIGAVEIS
-            })
-        else:
-            df_pyg = df_analise
+        df_pyg = df_analise
 
         col_fechar, _ = st.columns([1, 4])
         with col_fechar:
