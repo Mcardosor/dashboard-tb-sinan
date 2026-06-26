@@ -452,7 +452,7 @@ _THEME_TOGGLE_JS = """
     p.document.documentElement.setAttribute('data-theme', t);
     p.localStorage.setItem(KEY, t);
     var btn = p.document.getElementById('_tb_theme_btn');
-    if (btn) btn.innerHTML = t === 'dark' ? '&#9728;' : '&#9790;';
+    if (btn) btn.innerHTML = t === 'dark' ? '☀️' : '🌙';
     if (btn) btn.title = t === 'dark' ? 'Modo claro' : 'Modo escuro';
   }
 
@@ -475,10 +475,10 @@ _THEME_TOGGLE_JS = """
     btn.id = '_tb_theme_btn';
     btn.onclick = toggle;
     var saved = p.localStorage.getItem(KEY) || 'light';
-    btn.innerHTML = saved === 'dark' ? '&#9728;' : '&#9790;';
+    btn.innerHTML = saved === 'dark' ? '☀️' : '🌙';
     btn.title = saved === 'dark' ? 'Modo claro' : 'Modo escuro';
     btn.style.cssText = [
-      'position:fixed', 'top:8px', 'right:90px', 'z-index:999999',
+      'position:fixed', 'top:8px', 'z-index:9999999',
       'width:32px', 'height:32px', 'border-radius:8px',
       'border:1px solid rgba(0,0,0,.15)', 'background:rgba(255,255,255,.92)',
       'backdrop-filter:blur(8px)', 'cursor:pointer',
@@ -487,6 +487,12 @@ _THEME_TOGGLE_JS = """
       'transition:transform .12s,background .2s',
       'display:flex', 'align-items:center', 'justify-content:center'
     ].join(';');
+    function _pos() {
+      var vw = p.document.documentElement.clientWidth || p.innerWidth;
+      btn.style.left = Math.max(0, vw - 122) + 'px';
+    }
+    _pos();
+    p.addEventListener('resize', _pos);
     btn.onmouseover = function() { btn.style.transform = 'scale(1.1)'; };
     btn.onmouseout  = function() { btn.style.transform = 'scale(1)'; };
     p.document.body.appendChild(btn);
@@ -519,7 +525,7 @@ def inject_css() -> None:
     # Injeta dark mode CSS + botão lua/sol via iframe com acesso ao parent
     dark_css_escaped = _DARK_CSS.replace('\n', ' ').replace("'", "\\'").replace('"', '\\"')
     js = _THEME_TOGGLE_JS.replace('DARK_CSS_PLACEHOLDER', f"'{dark_css_escaped}'")
-    components.html(js, height=0, scrolling=False)
+    components.html(js, height=1, scrolling=False)
 
 
 def inject_css_page() -> None:
