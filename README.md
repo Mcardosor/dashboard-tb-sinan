@@ -2,7 +2,7 @@
 
 Painel interativo de vigilância epidemiológica da tuberculose no Brasil, com dados de notificação do SINAN NET cobrindo 2001 a 2026.
 
-> **Acesso:** https://telessaude.unb.br
+> **Acesso:** http://164.41.147.175:8502/cenarios/tb
 
 ---
 
