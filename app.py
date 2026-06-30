@@ -556,7 +556,10 @@ with tab2:
             d = df["tipo_entrada"].astype(str).replace("nan", "Não informado").replace(_NI_NORM).value_counts().reset_index()
             d.columns = ["Tipo", "Casos"]
             d = d[~d["Tipo"].isin(_INVAL)]
-            graficos.safe_pie(d, "Tipo", "Casos", height=H_SMALL)
+            # Barra horizontal em vez de pizza: 6 categorias com fatias pequenas
+            # (ex.: "Não Sabe"/"Pós-óbito" com poucas dezenas de casos) ficam
+            # ilegíveis em donut — barra ordenada compara melhor as categorias.
+            graficos.safe_bar_h(d.sort_values("Casos", ascending=False), "Casos", "Tipo", height=H_SMALL)
         else:
             grafico_vazio()
 
