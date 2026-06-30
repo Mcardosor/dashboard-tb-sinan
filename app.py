@@ -410,7 +410,7 @@ def _modal_municipios(uf: str, df_modal: pd.DataFrame) -> None:
             cliponaxis=False, textfont=dict(size=13, color="#e6edf3"),
             hovertemplate="<b>%{y}</b><br>Casos: %{x:,}<extra></extra>",
         )
-        st.plotly_chart(fig_mun, use_container_width=True, config={"displayModeBar": False})
+        st.plotly_chart(fig_mun, width="stretch", config={"displayModeBar": False})
 
     with st.expander(f"📋 Ver todos os {total_mun} municípios"):
         tabela = (
@@ -420,7 +420,7 @@ def _modal_municipios(uf: str, df_modal: pd.DataFrame) -> None:
             .rename(columns={"municipio_notificacao": "Município", "count": "Casos"})
         )
         tabela.index = range(1, len(tabela) + 1)
-        st.dataframe(tabela, use_container_width=True, height=300)
+        st.dataframe(tabela, width="stretch", height=300)
 
 
 tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
@@ -605,7 +605,7 @@ with tab2:
         st.subheader("Pirâmide Etária — Casos de TB")
         st.caption("Distribuição dos casos notificados por faixa etária e sexo")
         if "idade_anos" in df.columns and "sexo" in df.columns:
-            st.plotly_chart(graficos.fig_piramide(df), use_container_width=True, config=PLOTLY_CFG)
+            st.plotly_chart(graficos.fig_piramide(df), width="stretch", config=PLOTLY_CFG)
             st.caption("🟠 Barras em laranja = faixas etárias **<15 anos** (público prioritário)")
         else:
             grafico_vazio()
@@ -614,7 +614,7 @@ with tab2:
         st.caption("Distribuição dos óbitos por TB por faixa etária e sexo")
         fig_ob = graficos.fig_piramide_obitos(df)
         if fig_ob:
-            st.plotly_chart(fig_ob, use_container_width=True, config=PLOTLY_CFG)
+            st.plotly_chart(fig_ob, width="stretch", config=PLOTLY_CFG)
             st.caption("🟠 Barras em laranja = faixas etárias **<15 anos** (público prioritário)")
         else:
             st.info("Dados insuficientes de óbitos para a pirâmide.")
